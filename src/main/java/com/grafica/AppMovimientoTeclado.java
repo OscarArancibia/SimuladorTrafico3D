@@ -23,7 +23,7 @@ import org.lwjgl.opengl.GL30;
  * -Shader: codigo que dice como trnasformar vertice y q color dar a cada pixel, se escribe en lenguaje gls
  * VAO/VBO: Formas de guardar en la GPU los datos de los vectores
  */
-public class App{
+public class AppMovimientoTeclado{
     //referencia a nuestra ventana
     private long window;
 
@@ -37,6 +37,15 @@ public class App{
     /*VBO= Vertex Buffer Object: es un bloque de memoria en la GPU donde guardamos
       las posiciones de los vértices */
     private int vbo;
+
+    //UOffsetLocation = Almacena la ubicacion (ID interna) del uniform uOffSet dentro del programa de shaders, para poder modificarlo desde java
+    private int uOffsetLocation;
+
+    private float offsetX=0.0f;
+    private float offsetY=0.0f;
+
+    private static final float VELOCIDAD = 1.2f;
+    private static final float LIMITE = 0.9f;
 
     private static final int ANCHO = 800;
     private static final int ALTO = 600;
@@ -83,8 +92,14 @@ public class App{
         //creamos la ventana con el ancho y alto especificado, el titulo "Mi ventana" y 
         // sin monitor ni ventana compartida
         //este metodo devuelve un puntero a la ventana, que es un long
-        window = GLFW.glfwCreateWindow(ANCHO, ALTO, "Mi ventana", 0, 0);
-
+        window = GLFW.glfwCreateWindow(ANCHO, ALTO, "Mi ventana", 
+        0, 0);
+        //Cierra la ventana al presionar escape 
+        GLFW.glfwSetKeyCallback(window,(w,key,scancode,action,mods)->{
+            if(key==GLFW.GLFW_KEY_ESCAPE && action==GLFW.GLFW_PRESS){
+                GLFW.glfwSetWindowShouldClose(w,true);
+            }
+        });
         //Decir que todas las ordenes de OpenGL se van a ejecutar en esta ventana
         GLFW.glfwMakeContextCurrent(window);
 
@@ -119,22 +134,28 @@ public class App{
         //VertexSrc = codigo GLSL del vertex shader
         //Recibe la posicion de cada vertice(aPos) y le asigna a gl_Position(salida estandar)
         //"layout {location=0} in vec3 aPos;" = entrada en el canal 0.3 float x,y,z
-        String vertexSrc= "#version 330 core\n"+
-                          "layout (location = 0) in vec3 aPos;\n"+
-                          "void main(){gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);}\n";
-
+        String vertexSrc= """
+                #version 330 core
+                layout (location = 0) in vec3 aPos;
+                uniform vec2 uOffset;
+                void main(){
+                vec3 pos = vec3(aPos.xy+uOffset, aPos.z); // CORRECCIÓN: Estaba escrito aPOs, se cambió a aPos
+                gl_Position = vec4(pos, 1.0);}
+                """;
 
         /**
          * fragmentSrc = codigo GLSL del framework shader
          *FragColor= color de salida del pixel. vector de 4 float r,g,b,a
          *Se ejecuta por cada pixel que se dibuja en la pantalla
         */
-        String fragmentSrc= "#version 330 core\n" +
-                            "out vec4 fragColor;\n" + // <-- AGREGAR ESTA LÍNEA EXACTAMENTE AQUÍ
-                             "void main()\n" +
-                            "{\n" +
-                            "   fragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n" +
-                             "}\n";
+        String fragmentSrc= """
+                #version 330 core
+                out vec4 fragColor;
+                void main(){
+                fragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+                }
+                """;
+       
         //Creamos el vertex shader en la GPU y obtenemos su referencia
         int vertexShader = GL20.glCreateShader(GL20.GL_VERTEX_SHADER);
         //Asignamos el codigo del vertex shader a la GPU
@@ -160,6 +181,12 @@ public class App{
 
         if(GL20.glGetProgrami(programa,GL20.GL_LINK_STATUS)==GL11.GL_FALSE){
             throw new RuntimeException("Error al enlazar el programa de shaders: " + GL20.glGetProgramInfoLog(programa));
+        }
+
+        uOffsetLocation = GL20.glGetUniformLocation(programa, "uOffset");
+
+        if(uOffsetLocation == -1){
+            throw new RuntimeException("No se pudo encontrar el uniform uOffset en el programa de shaders");
         }
 
         //borramos los shaders de la GPU, ya que ya estan enlazados en el programa y no los necesitamos
@@ -215,6 +242,34 @@ public class App{
   
     }
 
+    private void procesarInput(float deltaTime){
+        float paso = VELOCIDAD *deltaTime;
+
+        if(GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT)==GLFW.GLFW_PRESS
+            || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_A)==GLFW.GLFW_PRESS){
+                offsetX-=paso;
+        }
+
+        if(GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT)==GLFW.GLFW_PRESS
+            || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_D)==GLFW.GLFW_PRESS){
+                offsetX+=paso;
+        }
+
+        if(GLFW.glfwGetKey(window, GLFW.GLFW_KEY_UP)==GLFW.GLFW_PRESS
+            || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_W)==GLFW.GLFW_PRESS){
+                offsetY+=paso;
+        }
+
+        if(GLFW.glfwGetKey(window, GLFW.GLFW_KEY_DOWN)==GLFW.GLFW_PRESS
+            || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_S)==GLFW.GLFW_PRESS){
+                offsetY-=paso;
+        }
+
+        //Clamping
+        offsetX = Math.max(-LIMITE, Math.min(LIMITE, offsetX));
+        offsetY = Math.max(-LIMITE, Math.min(LIMITE, offsetY));
+    }
+
 
     /**
     * Bucle principal: en cada iteracion dibujamos un frame
@@ -226,13 +281,28 @@ public class App{
     * 5. Procesamos los eventos de teclado y mouse
     */
     private void loop() {
+        float ultimoTiempo = (float)GLFW.glfwGetTime();
+
         while (!GLFW.glfwWindowShouldClose(window)) {
+
+            //MOvimiento desacoplado de FPS usando deltaTime
+            float tiempoActual = (float)GLFW.glfwGetTime();
+            float deltaTiempo = tiempoActual - ultimoTiempo;
+            ultimoTiempo = tiempoActual;
+            
+            // CONEXIÓN AGREGADA: Ejecutamos el método para leer el teclado y mover el cuadrado
+            procesarInput(deltaTiempo);
+
             //Color con el que vamos a limpiar la pantalla 
             GL11.glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             //Limpiamos el buffer de color (rellenamos con el color anterior)
             GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
             //Activar nuestro programa de shaders
             GL20.glUseProgram(programa);
+            
+            //Enviamos el offset a la GPU para que el vertex shader lo use antes de dibujar
+
+            GL20.glUniform2f(uOffsetLocation, offsetX, offsetY);
             //Activamosel VAO que contiene el triangulo que queremos dibujar
             GL30.glBindVertexArray(vao);
             //Orden del dibujo: modo, empezar en el vertice 0, dibujar 3 vertices
@@ -253,12 +323,8 @@ public class App{
         GLFW.glfwTerminate(); 
     }
 
-
-
-
-
     public static void main( String[] args )
     {
-        new App().run();
+        new AppMovimientoTeclado().run();
     }
 }
