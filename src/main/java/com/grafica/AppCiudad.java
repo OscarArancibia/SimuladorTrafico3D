@@ -71,28 +71,35 @@ public class AppCiudad {
     protected int alto = 760; // Alto inicial de la ventana; después contiene píxeles del framebuffer.
     protected float orbita = 0.6f; // Ángulo inicial de la cámara alrededor de la ciudad, en radianes.
     protected boolean vistaMapa = false; // Clase4 lo activa cuando dibuja la vista superior.
-    protected static final float LIMITE = 65.0f; // Distancia del origen a cada borde: el mapa mide 130 unidades (13 celdas x 10).
+    protected static final float LIMITE = 105.0f; // Distancia del origen a cada borde: el mapa mide 210 unidades (21 celdas x 10).
     protected static final float CELDA = 10; // Ancho y profundidad de cada celda del mapa.
     private final Map<String, Integer> uniforms = new HashMap<>(); // Evita buscar repetidamente el mismo uniform.
 
-    //0 = calle, 1 = edificio, 2 = parque, 3 = fuente, 4 = policia, 5 = bomberos, 6 = gasolinera
-
+    // 0 = calle, 1 = edificio, 2 = parque, 3 = fuente, 4 = policía, 5 = bomberos, 6 = parada de bus, 7 = gasolinera, 8 = acera vacía.
+    // Mapa de 21x21: calles en las filas/columnas 1, 4, 7, 10, 13, 16 y 19 (la 1 y la 19 forman el anillo perimetral); el centro es el índice 10.
+    // La fuente está en (10, 10); la policía, los bomberos y la gasolinera están en (6, 5), (12, 8) y (15, 11); el resto son edificios y parques.
     protected static final int[][] MAPA = {
-        
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // Borde superior (calle)
-        { 0, 1, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0},
-        { 0, 4, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0}, // (2,1) = policía
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // Calle horizontal
-        { 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0},
-        { 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0},
-        { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0}, // Calle horizontal
-        { 0, 2, 2, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0},
-        { 0, 2, 2, 0, 5, 1, 0, 1, 1, 0, 1, 1, 0}, // (8,4) = bomberos
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // Calle horizontal
-        { 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 0},
-        { 0, 1, 1, 0, 1, 1, 0, 6, 1, 0, 2, 2, 0}, // (11,7) = gasolinera
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}  // Borde inferior (calle)
-    
+        { 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8 },
+        { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8 },
+        { 8, 0, 6, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0, 1, 6, 0, 8 },
+        { 8, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0, 1, 1, 0, 8 },
+        { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8 },
+        { 8, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0, 1, 1, 0, 8 },
+        { 8, 0, 6, 1, 0, 4, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0, 1, 6, 0, 8 },
+        { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8 },
+        { 8, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 8 },
+        { 8, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 8 },
+        { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8 },
+        { 8, 0, 1, 1, 0, 2, 2, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 8 },
+        { 8, 0, 1, 1, 0, 2, 2, 0, 5, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 8 },
+        { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8 },
+        { 8, 0, 6, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 0, 1, 6, 0, 8 },
+        { 8, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 7, 1, 0, 2, 2, 0, 1, 1, 0, 8 },
+        { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8 },
+        { 8, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 8 },
+        { 8, 0, 6, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 6, 0, 8 },
+        { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8 },
+        { 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8 }
     };
 
     // ==================== 2. INICIO, CICLO Y LIMPIEZA ====================
@@ -210,9 +217,9 @@ public class AppCiudad {
 
     /** Coloca la cámara elevada y orientada hacia el centro de la ciudad. */
     protected void configurarCamara() {
-        float camaraX = (float) Math.sin(orbita) * 105; // Calcula la posición X de una órbita de radio 105 (antes 65).
-        float camaraZ = (float) Math.cos(orbita) * 105; // Calcula la posición Z de esa misma órbita.
-        vector("uOjo", camaraX, 90, camaraZ); // Envía la posición de la cámara a 90 unidades de altura para abarcar el mapa de 130x130.
+        float camaraX = (float) Math.sin(orbita) * 170; // Calcula la posición X de una órbita de radio 170 (mapa de 210x210).
+        float camaraZ = (float) Math.cos(orbita) * 170; // Calcula la posición Z de esa misma órbita.
+        vector("uOjo", camaraX, 150, camaraZ); // Envía la posición de la cámara a 150 unidades de altura para abarcar el mapa de 210x210.
         vector("uObjetivo", 0, 0, 0); // Apunta la cámara hacia el origen del mundo.
         decimal("uAspecto", (float) ancho / alto); // Envía la proporción de la imagen para evitar deformaciones.
     }
@@ -256,8 +263,24 @@ public class AppCiudad {
                 if (tipo == 0) { // Selecciona las celdas transitables.
                     dibujarMarcasCalle(fila, columna, x, z); // Añade líneas amarillas entre intersecciones.
                 } else { // Las demás celdas representan manzanas completas.
-                    caja(x, 0.15f, z, 10, 0.3f, 10, 0.60f, 0.64f, 0.66f); // Dibuja la acera elevada sobre el asfalto.
-                    if (tipo == 1) { // Selecciona una manzana ocupada por un edificio.
+                    boolean esBordeFila = (fila == 0 || fila == MAPA.length - 1); // Celda de la fila exterior (norte o sur).
+                    boolean esBordeColumna = (columna == 0 || columna == MAPA[fila].length - 1); // Celda de la columna exterior (oeste o este).
+                    if (esBordeFila && esBordeColumna) { // Esquina absoluta del mapa: solo un cuadrado de 2x2 pegado al anillo de calle.
+                        float desvioX = (columna == 0) ? 4.0f : -4.0f; // Hacia el interior del mapa en X.
+                        float desvioZ = (fila == 0) ? 4.0f : -4.0f; // Hacia el interior del mapa en Z.
+                        caja(x + desvioX, 0.15f, z + desvioZ, 2, 0.3f, 2, 0.60f, 0.64f, 0.66f); // Acera de esquina de 2x2.
+                    } else if (fila == 0) { // Borde superior: cordón de 2 unidades pegado a la calle.
+                        caja(x, 0.15f, z + 4.0f, 10, 0.3f, 2, 0.60f, 0.64f, 0.66f);
+                    } else if (fila == MAPA.length - 1) { // Borde inferior.
+                        caja(x, 0.15f, z - 4.0f, 10, 0.3f, 2, 0.60f, 0.64f, 0.66f);
+                    } else if (columna == 0) { // Borde izquierdo.
+                        caja(x + 4.0f, 0.15f, z, 2, 0.3f, 10, 0.60f, 0.64f, 0.66f);
+                    } else if (columna == MAPA[fila].length - 1) { // Borde derecho.
+                        caja(x - 4.0f, 0.15f, z, 2, 0.3f, 10, 0.60f, 0.64f, 0.66f);
+                    } else { // Acera interior: bloque completo de 10x10.
+                        caja(x, 0.15f, z, 10, 0.3f, 10, 0.60f, 0.64f, 0.66f); // Dibuja la acera elevada sobre el asfalto.
+                    }
+                    if (tipo == 1 && !esBordeFila && !esBordeColumna) { // Selecciona una manzana ocupada por un edificio (nunca en el cordón exterior).
                         float altura = 5 + (fila * 3 + columna * 7) % 9; // Varía la altura de forma reproducible entre 5 y 13.
                         float rojo = 0.28f + columna * 0.045f; // Varía el tono rojo según la columna.
                         float azul = 0.48f + fila * 0.025f; // Varía el tono azul según la fila.
@@ -273,12 +296,12 @@ public class AppCiudad {
 
     /** Dibuja las líneas discontinuas de las calles dejando los cruces despejados. */
     private void dibujarMarcasCalle(int fila, int columna, float x, float z) {
-        if (fila % 3 == 0 && columna % 3 != 0) { // Tramo horizontal: fila de calle (0, 3, 6, 9, 12) entre dos cruces.
+        if (fila % 3 == 1 && columna % 3 != 1) { // Tramo horizontal: fila de calle (1, 4, 7, 10, 13, 16, 19) entre dos cruces.
             for (int desplazamiento = -3; desplazamiento <= 3; desplazamiento += 3) { // Coloca tres marcas en la celda.
                 caja(x + desplazamiento, 0.025f, z, 1.6f, 0.03f, 0.13f, 1, 0.84f, 0.35f); // Dibuja una línea alargada en X.
             }
         }
-        if (columna % 3 == 0 && fila % 3 != 0) { // Tramo vertical: columna de calle (0, 3, 6, 9, 12) entre dos cruces.
+        if (columna % 3 == 1 && fila % 3 != 1) { // Tramo vertical: columna de calle (1, 4, 7, 10, 13, 16, 19) entre dos cruces.
             for (int desplazamiento = -3; desplazamiento <= 3; desplazamiento += 3) { // Repite las marcas sobre ese tramo.
                 caja(x, 0.025f, z + desplazamiento, 0.13f, 0.03f, 1.6f, 1, 0.84f, 0.35f); // Dibuja una línea alargada en Z.
             }
@@ -355,8 +378,8 @@ public class AppCiudad {
                 vNormal = normalize(giro * (aNormal / uEscala)); // Corrige la normal con la inversa transpuesta de escala y giro.
 
                 if (uMapa == 1) { // Esta rama se usa al dibujar el minimapa en JuegoEntregas.
-                    float pantallaX = vMundo.x / 67.0; // Ajusta el ancho del mundo (LIMITE 65 + 2) al intervalo visible -1 a 1.
-                    float pantallaY = -vMundo.z / 67.0; // Coloca el norte (-Z) en la parte superior del mapa.
+                    float pantallaX = vMundo.x / 107.0; // Ajusta el ancho del mundo (LIMITE 105 + 2) al intervalo visible -1 a 1.
+                    float pantallaY = -vMundo.z / 107.0; // Coloca el norte (-Z) en la parte superior del mapa.
                     float profundidad = -vMundo.y / 100.0; // Hace que los objetos más altos se vean por encima.
                     gl_Position = vec4(pantallaX, pantallaY, profundidad, 1.0); // Proyecta sin reducir objetos lejanos.
                 } else { // La escena principal utiliza una cámara con perspectiva.
@@ -369,7 +392,7 @@ public class AppCiudad {
                     float vistaZ = -dot(diferencia, frente); // Usa Z negativa delante de la cámara, como espera OpenGL.
                     float factor = 1.0 / tan(radians(55.0) * 0.5); // Convierte el campo visual de 55 grados en escala de perspectiva.
                     float cerca = 0.1; // Define la distancia mínima visible.
-                    float lejos = 250.0; // Define la distancia máxima visible.
+                    float lejos = 500.0; // Define la distancia máxima visible.
                     float clipX = vistaX * factor / uAspecto; // Corrige la coordenada horizontal según el ancho de la pantalla.
                     float clipY = vistaY * factor; // Aplica el campo visual a la coordenada vertical.
                     float clipZ = (lejos + cerca) / (cerca - lejos) * vistaZ; // Calcula el término de profundidad dependiente de Z.

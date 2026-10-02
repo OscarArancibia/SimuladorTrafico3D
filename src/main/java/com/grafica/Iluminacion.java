@@ -12,12 +12,23 @@ public class Iluminacion extends Vehiculo {
     // ==================== 1. ESTADO Y POSICIONES DE LAS LUCES ====================
     protected boolean noche = true; // Inicia la escena con iluminación nocturna.
     protected boolean faros = true; // Inicia los focos del auto encendidos.
-    protected static final float[][] LUCES = { // Cada fila contiene X, Y, Z de una bombilla: 20 farolas sobre las aceras junto a las calles verticales.
-        {-35.5f, 4.5f, -45}, {-24.5f, 4.5f, -45}, {-5.5f, 4.5f, -45}, {5.5f, 4.5f, -45}, {24.5f, 4.5f, -45}, {35.5f, 4.5f, -45}, // Farolas junto a las calles en Z = -45.
-        {-35.5f, 4.5f, -15}, {-24.5f, 4.5f, -15}, {24.5f, 4.5f, -15}, {35.5f, 4.5f, -15}, // Farolas junto a las calles en Z = -15.
-        {-35.5f, 4.5f, 15}, {-24.5f, 4.5f, 15}, {24.5f, 4.5f, 15}, {35.5f, 4.5f, 15}, // Farolas junto a las calles en Z = 15.
-        {-35.5f, 4.5f, 45}, {-24.5f, 4.5f, 45}, {-5.5f, 4.5f, 45}, {5.5f, 4.5f, 45}, {24.5f, 4.5f, 45}, {35.5f, 4.5f, 45} // Farolas junto a las calles en Z = 45.
-    };
+    protected static final float ALTURA_LUZ = 4.5f; // Altura de la bombilla: la usan el shader y el modelo de la farola.
+    protected static final int TOTAL_LUCES = 49; // Una farola en cada cruce de la cuadrícula de calles de 7x7.
+    protected static final float[][] LUCES = new float[TOTAL_LUCES][3]; // Cada fila contiene X, Y, Z de una bombilla.
+    static { // Se ejecuta una vez al cargar la clase y rellena la cuadrícula.
+        int indice = 0; // Posición lineal en el arreglo (0 a 48).
+        int[] indicesMapa = {1, 4, 7, 10, 13, 16, 19}; // Filas y columnas de calle del mapa de 21x21 (la 1 y la 19 forman el anillo).
+        for (int fila : indicesMapa) { // Recorre las 7 filas de calle.
+            for (int col : indicesMapa) { // Recorre las 7 columnas de calle.
+                float offsetX = (col == 19) ? -6.0f : 6.0f; // En el cruce del último índice se invierte el desplazamiento: la acera queda hacia dentro.
+                float offsetZ = (fila == 19) ? -6.0f : 6.0f; // Misma regla en profundidad.
+                LUCES[indice][0] = (col - 10) * 10.0f + offsetX; // Coordenada X: esquina de la acera, 1 unidad dentro de la manzana vecina.
+                LUCES[indice][1] = ALTURA_LUZ; // Altura de la bombilla.
+                LUCES[indice][2] = (fila - 10) * 10.0f + offsetZ; // Coordenada Z.
+                indice++;
+            }
+        }
+    }
 
     // ==================== 2. CONTROLES E INDICADORES ====================
 
@@ -63,7 +74,7 @@ public class Iluminacion extends Vehiculo {
         }
         entero("uEmision", 0); // Hace que los objetos normales reciban iluminación.
 
-        for (int indice = 0; indice < LUCES.length; indice++) { // Recorre todas las bombillas (20).
+        for (int indice = 0; indice < LUCES.length; indice++) { // Recorre todas las bombillas (49).
             float x = LUCES[indice][0]; // Lee la coordenada horizontal de la bombilla.
             float y = LUCES[indice][1]; // Lee su altura sobre el suelo.
             float z = LUCES[indice][2]; // Lee su coordenada en profundidad.
@@ -82,23 +93,28 @@ public class Iluminacion extends Vehiculo {
     @Override // Añade geometría a la ciudad y al auto heredados.
     protected void escena() {
         super.escena(); // Dibuja la ciudad y el vehículo de las primeras dos lecciones.
-        for (float[] luz : LUCES) { // Selecciona una farola a la vez.
-            float x = luz[0]; // Lee la posición horizontal del poste.
-            float y = luz[1]; // Lee la altura de la bombilla.
-            float z = luz[2]; // Lee la posición del poste en profundidad.
-            caja(x, 2.2f, z, 0.18f, 4.4f, 0.18f, 0.20f, 0.24f, 0.28f); // Dibuja el poste delgado y oscuro.
-            float rojo = 0.22f; // De día: vidrio oscuro apagado (componente roja).
-            float verde = 0.24f; // De día: componente verde del vidrio apagado.
-            float azul = 0.27f; // De día: componente azul del vidrio apagado.
-            if (noche) { // Solo de noche la bombilla aparenta estar encendida.
-                entero("uEmision", 1); // Evita que la bombilla sea oscurecida por la iluminación.
-                rojo = 1; // Color cálido brillante de la bombilla encendida.
-                verde = 0.83f; // Componente verde de la luz cálida.
-                azul = 0.42f; // Componente azul de la luz cálida.
+        for (int i = 0; i < LUCES.length; i++) { // Recorre todas las luces.
+            int filaLuz = i / 7; // Fila de la cuadrícula 7x7 (0 a 6); 2, 3 y 4 equivalen a las calles 7, 10 y 13.
+            int columnaLuz = i % 7; // Columna de la cuadrícula 7x7.
+            if (filaLuz >= 2 && filaLuz <= 4 && columnaLuz >= 2 && columnaLuz <= 4) { // Cruce interior con semáforos (misma regla que decorarCiudad).
+                continue; // Omite solo el poste: la luz sigue enviándose al shader desde prepararLuces().
             }
-            caja(x, y, z, 0.7f, 0.35f, 0.7f, rojo, verde, azul); // Dibuja la bombilla, encendida o apagada según el ambiente.
-            entero("uEmision", 0); // Restablece el material normal para el siguiente objeto.
+            dibujarFarola(LUCES[i][0], LUCES[i][2]); // Dibuja el poste exactamente donde está la fuente de luz del shader.
         }
+    }
+
+    /** Dibuja una farola: poste gris alto y bloque en la punta, centrado en la bombilla (x, ALTURA_LUZ, z). */
+    protected void dibujarFarola(float x, float z) {
+        caja(x, ALTURA_LUZ / 2 - 0.05f, z, 0.18f, ALTURA_LUZ - 0.1f, 0.18f, 0.20f, 0.24f, 0.28f); // Poste que termina justo bajo la bombilla.
+        float rojo = 0.22f; // De día: vidrio oscuro apagado.
+        float verde = 0.24f;
+        float azul = 0.27f;
+        if (noche) { // Solo de noche la bombilla aparenta estar encendida.
+            entero("uEmision", 1); // Evita que la bombilla sea oscurecida por la iluminación.
+            rojo = 1; verde = 0.83f; azul = 0.42f; // Color cálido brillante.
+        }
+        caja(x, ALTURA_LUZ, z, 0.7f, 0.35f, 0.7f, rojo, verde, azul); // Bloque de la bombilla, en la misma posición que uLuces[i].
+        entero("uEmision", 0); // Restablece el material normal.
     }
 
     // ==================== 5. CÁLCULO DE LUZ EN LA GPU ====================
@@ -111,7 +127,7 @@ public class Iluminacion extends Vehiculo {
             in vec3 vMundo; // Recibe la posición del fragmento en la ciudad.
             in vec3 vNormal; // Recibe la dirección perpendicular a la superficie.
             uniform vec3 uColor; // Recibe el color base de la caja.
-            uniform vec3 uLuces[20]; // Recibe las posiciones de las 20 farolas.
+            uniform vec3 uLuces[49]; // Recibe las posiciones de las 49 farolas.
             uniform vec3 uAuto; // Recibe la posición del auto a la altura de los faros.
             uniform vec3 uFrente; // Recibe la dirección hacia la que apunta el vehículo.
             uniform int uNoche; // Vale 1 de noche y 0 de día.
@@ -138,7 +154,7 @@ public class Iluminacion extends Vehiculo {
                 luz += vec3(intensidadSol) * incidenciaSol; // Suma la contribución direccional al ambiente.
 
                 if (uNoche == 1) { // Calcula la iluminación de las farolas solo de noche.
-                    for (int indice = 0; indice < 20; indice++) { // Acumula el aporte de cada bombilla.
+                    for (int indice = 0; indice < 49; indice++) { // Acumula el aporte de cada bombilla.
                         vec3 haciaLuz = uLuces[indice] - vMundo; // Forma el vector desde la superficie hacia la farola.
                         float distancia = length(haciaLuz); // Mide cuántas unidades separan superficie y bombilla.
                         float difusa = max(dot(normal, normalize(haciaLuz)), 0.0); // Calcula la incidencia de la luz sobre la cara.

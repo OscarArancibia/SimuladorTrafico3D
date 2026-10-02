@@ -27,13 +27,29 @@ public class JuegoEntregas extends Iluminacion {
 
     // ==================== MONEDA COLECCIONABLE ====================
     private static final float[][] PUNTOS_MONEDA = { // Posibles lugares de la moneda: todos sobre calles y lejos de las paradas de entrega.
-        {0, -30}, {30, 0}, {-30, 0}, {60, -30}, {-60, 30}, {30, 60}, {-30, -60}, {60, 30}, {-60, -30}, {0, -60}
+        {0, -30}, {30, 0}, {-30, 0}, {60, -30}, {-60, 30}, {30, 60}, {-30, -60}, {60, 30}, {-60, -30}, {0, -60}, {90, -60}, {-90, 60}, {0, 90}, {0, -90}
     };
     private int puntoMoneda = 0; // Índice del lugar donde está la moneda ahora.
     private float monedaX = PUNTOS_MONEDA[0][0]; // Posición X actual de la moneda.
     private float monedaZ = PUNTOS_MONEDA[0][1]; // Posición Z actual de la moneda.
-    private static final float LIMITE_HUD = 67; // Mitad del rango que el shader del minimapa convierte a pantalla (LIMITE 65 + 2).
+    private static final float LIMITE_HUD = 107; // Mitad del rango que el shader del minimapa convierte a pantalla (LIMITE 105 + 2).
     private int monedasRecolectadas = 0; // Cuenta las monedas que ha recogido el jugador.
+
+    // ==================== VIDAS Y GAME OVER ====================
+    private static final int VIDAS_MAXIMAS = 3; // Choques permitidos antes del Game Over.
+    private int choques = 0; // Choques contra otros autos acumulados en la partida.
+    private boolean gameOver = false; // Cuando es true el juego se congela y se muestra la X roja.
+    private float invulnerable = 0; // Segundos restantes de gracia tras reaparecer, para no perder dos vidas seguidas.
+    private final float spawnX; // Coordenada X del punto de inicio del jugador.
+    private final float spawnZ; // Coordenada Z del punto de inicio del jugador.
+    private final float spawnAngulo; // Orientación inicial del jugador.
+
+    /** Guarda el punto de inicio heredado de Vehiculo para poder reaparecer ahí. */
+    public JuegoEntregas() {
+        spawnX = autoX; // Copia la X inicial del auto.
+        spawnZ = autoZ; // Copia la Z inicial del auto.
+        spawnAngulo = angulo; // Copia la orientación inicial.
+    }
 
     // ==================== TRÁFICO AUTÓNOMO ====================
     private static final float[][][] RUTAS = { // Cada ruta es un circuito cerrado de esquinas (X, Z) que siempre cae sobre calles.
@@ -43,6 +59,14 @@ public class JuegoEntregas extends Iluminacion {
         {{-60, 0}, {-30, 0}, {-30, 30}, {-60, 30}}, // Bot 3 (civil): circuito en el sector oeste.
         {{30, 0}, {60, 0}, {60, 60}, {30, 60}} // Bot 4 (civil): circuito en el sector sureste.
     };
+    private static final float LIMITE_RUTA_BUS = 90.0f; // Eje del anillo de asfalto por el que da la vuelta el bus (celdas 1 y 19).
+    private static final float DESVIO_BUS = 2.5f; // Desplazamiento hacia el carril derecho (hacia dentro del anillo).
+    private static final float CARRIL_BUS = LIMITE_RUTA_BUS - DESVIO_BUS; // Límite real de la ruta: 87,5 unidades.
+    private float busX = -CARRIL_BUS; // Posición X del bus (esquina superior izquierda del anillo, ya en su carril).
+    private float busZ = -CARRIL_BUS; // Posición Z del bus.
+    private float busAngulo = -(float) Math.PI / 2; // Orientación en radianes: mirando hacia +X.
+    private int estadoBus = 0; // 0 = hacia +X, 1 = hacia +Z, 2 = hacia -X, 3 = hacia -Z.
+    private static final float DESVIO_CARRIL = 2.5f; // Distancia lateral al eje de la calle: los bots circulan por su carril derecho.
     private final float[] botX = {-30, 60, 30, -60, 30}; // Posición X inicial de cada bot: justo en una esquina de su ruta.
     private final float[] botZ = {-30, 60, -60, 0, 0}; // Posición Z inicial de cada bot.
     private final float[] botAngulo = {0, 0, 0, 0, 0}; // Orientación en radianes; se recalcula en cada cuadro.
@@ -64,7 +88,7 @@ public class JuegoEntregas extends Iluminacion {
     };
 
     // ==================== MASCOTAS EN LOS PARQUES ====================
-    private static final int[][] PARCELAS_MASCOTAS = {{1, 7}, {8, 2}, {10, 11}, {7, 1}}; // Celdas de parque (tipo 2) de {fila, columna}: 2 perros y 2 gatos.
+    private static final int[][] PARCELAS_MASCOTAS = {{5, 11}, {12, 6}, {14, 15}, {11, 5}}; // Celdas de parque (tipo 2) de {fila, columna}: 2 perros y 2 gatos.
     private final float[] animalCentroX = new float[4]; // Centro X del parque donde vive cada animal.
     private final float[] animalCentroZ = new float[4]; // Centro Z del parque donde vive cada animal.
     private final float[] animalX = new float[4]; // Posición X actual: índices 0-1 perros, 2-3 gatos.
@@ -90,7 +114,7 @@ public class JuegoEntregas extends Iluminacion {
         if (key == GLFW_KEY_M) { // Comprueba si se pulsó la tecla del mapa.
             mostrarMapa = !mostrarMapa; // Alterna entre mostrar y ocultar la vista superior.
         }
-        if (key == GLFW_KEY_P) { // Comprueba si se pulsó la tecla de pausa.
+        if (key == GLFW_KEY_P && !gameOver) { // Comprueba si se pulsó la tecla de pausa (no aplica en Game Over).
             enPausa = !enPausa; // Alterna entre pausa y juego.
             if (enPausa) { // Al pausar, el título pasa a ser la ayuda de controles.
                 glfwSetWindowTitle(ventana, "PAUSA (P: continuar) - Controles: WASD/flechas mover, Espacio freno, C camara, F luces, N dia/noche, M mapa, R reiniciar, ESC salir");
@@ -105,6 +129,18 @@ public class JuegoEntregas extends Iluminacion {
         entregas = 0; // Vuelve a seleccionar la primera parada.
         tiempo = 0; // Reinicia el cronómetro de la partida.
         monedasRecolectadas = 0; // Vuelve a contar las monedas desde cero.
+        choques = 0; // Restaura las tres vidas.
+        gameOver = false; // Sale de la pantalla de Game Over.
+        enPausa = false; // Quita la pausa si estaba activa.
+        invulnerable = 0; // Cancela la gracia pendiente.
+        busX = -CARRIL_BUS; // Devuelve el bus a la esquina superior izquierda del anillo.
+        busZ = -CARRIL_BUS;
+        busAngulo = -(float) Math.PI / 2;
+        estadoBus = 0;
+        autoX = spawnX; // Coloca al jugador en su punto de inicio.
+        autoZ = spawnZ; // Misma corrección en profundidad.
+        angulo = spawnAngulo; // Recupera la orientación inicial.
+        velocidad = 0; // Detiene el auto.
     }
 
     /** Mueve la moneda a un punto distinto de la lista, siempre sobre una calle. */
@@ -123,12 +159,16 @@ public class JuegoEntregas extends Iluminacion {
     /** Actualiza el vehículo y comprueba si llegó y frenó en el destino activo. */
     @Override // Añade el objetivo del juego al movimiento heredado.
     protected void actualizar(float deltaTime) {
-        if (enPausa) { // Si el juego está en pausa nada se mueve ni se actualiza (tampoco el título).
+        if (enPausa || gameOver) { // En pausa o Game Over nada se mueve ni se actualiza.
             return;
+        }
+        if (invulnerable > 0) { // Descuenta la gracia posterior a un choque.
+            invulnerable -= deltaTime;
         }
         float autoXPrevio = autoX; // Guarda la posición X del jugador antes de moverlo.
         float autoZPrevio = autoZ; // Guarda la posición Z del jugador antes de moverlo.
         super.actualizar(deltaTime); // Procesa aceleración, giro, colisiones y título de la ventana.
+        actualizarBus(deltaTime); // Da la vuelta al anillo perimetral por su carril derecho.
         actualizarBots(deltaTime); // Mueve el tráfico autónomo, incluso cuando el juego ya terminó.
         resolverChoqueBots(autoXPrevio, autoZPrevio); // Detiene al jugador y al bot si se tocan.
         float dx = autoX - monedaX; // Separación horizontal entre el auto y la moneda (autoX viene de Vehiculo).
@@ -165,6 +205,7 @@ public class JuegoEntregas extends Iluminacion {
             mensaje += "Entregas " + entregas + "/3"; // Indica cuántas paradas se completaron.
             mensaje += " | Frena en la marca dorada | " + (int) tiempo + " s"; // Explica la condición de entrega y el tiempo.
         }
+        mensaje += " | Vidas: " + (VIDAS_MAXIMAS - choques) + " | [P] Pausar [R] Reiniciar"; // Muestra las vidas restantes y los controles.
         mensaje += " | Monedas: " + monedasRecolectadas; // Muestra cuántas monedas lleva el jugador.
         return mensaje; // Entrega el texto a actualizarTitulo() de clase2.
     }
@@ -180,6 +221,7 @@ public class JuegoEntregas extends Iluminacion {
         }
         // La marca pequeña de la parada (dibujarDestino) ya no se dibuja; las entregas siguen funcionando igual.
         dibujarMoneda(monedaX, monedaZ, tiempoAnimacion * 2, tiempoAnimacion); // Dibuja la moneda: marca amarilla y cubo flotante giratorio.
+        dibujarBus(busX, busZ, busAngulo, tiempoAnimacion); // Dibuja el bus del anillo, también en el minimapa.
         for (int bot = 0; bot < RUTAS.length; bot++) { // Dibuja cada auto autónomo, también en el minimapa.
             if (bot == 0) { // El primer bot es la patrulla de policía.
                 dibujarAutoPolicia(botX[bot], botZ[bot], botAngulo[bot], tiempoAnimacion);
@@ -377,6 +419,55 @@ public class JuegoEntregas extends Iluminacion {
     }
 
     /** Avanza cada bot hacia la siguiente esquina de su ruta y gira 90 grados al llegar. */
+    /** Máquina de estados del bus: recorre el anillo en sentido horario a 15 unidades por segundo. */
+    private void actualizarBus(float deltaTime) {
+        float paso = 15.0f * deltaTime; // Distancia que avanza en este cuadro.
+        if (estadoBus == 0) { // Tramo superior: hacia +X.
+            busX += paso;
+            if (busX >= CARRIL_BUS) { busX = CARRIL_BUS; busAngulo = (float) Math.PI; estadoBus = 1; } // Gira hacia +Z.
+        } else if (estadoBus == 1) { // Tramo derecho: hacia +Z.
+            busZ += paso;
+            if (busZ >= CARRIL_BUS) { busZ = CARRIL_BUS; busAngulo = (float) Math.PI / 2; estadoBus = 2; } // Gira hacia -X.
+        } else if (estadoBus == 2) { // Tramo inferior: hacia -X.
+            busX -= paso;
+            if (busX <= -CARRIL_BUS) { busX = -CARRIL_BUS; busAngulo = 0; estadoBus = 3; } // Gira hacia -Z.
+        } else { // Tramo izquierdo: hacia -Z.
+            busZ -= paso;
+            if (busZ <= -CARRIL_BUS) { busZ = -CARRIL_BUS; busAngulo = -(float) Math.PI / 2; estadoBus = 0; } // Gira hacia +X.
+        }
+    }
+
+    /** Dibuja el bus: carrocería celeste larga, techo blanco, ventanas laterales, parabrisas, faros y ruedas. */
+    private void dibujarBus(float x, float z, float angulo, float tiempo) {
+        float vibracion = (float) Math.sin(tiempo * 20) * 0.015f; // Pequeña vibración del motor.
+        piezaVehiculo(x, z, angulo, 0, 1.7f + vibracion, 0, 2.6f, 2.2f, 9.0f, 0.20f, 0.65f, 0.85f); // Carrocería celeste (mucho más larga y alta que un auto).
+        piezaVehiculo(x, z, angulo, 0, 2.85f + vibracion, 0, 2.4f, 0.1f, 8.8f, 0.95f, 0.95f, 0.97f); // Techo blanco.
+        for (int ventana = 0; ventana < 5; ventana++) { // Cinco ventanas por lado.
+            float lz = -3.0f + ventana * 1.5f; // Posición a lo largo del bus.
+            piezaVehiculo(x, z, angulo, -1.31f, 2.05f + vibracion, lz, 0.06f, 0.8f, 1.1f, 0.12f, 0.20f, 0.30f); // Ventana izquierda.
+            piezaVehiculo(x, z, angulo, 1.31f, 2.05f + vibracion, lz, 0.06f, 0.8f, 1.1f, 0.12f, 0.20f, 0.30f); // Ventana derecha.
+        }
+        piezaVehiculo(x, z, angulo, 0, 2.05f + vibracion, -4.52f, 2.2f, 0.9f, 0.06f, 0.12f, 0.20f, 0.30f); // Parabrisas frontal.
+        piezaVehiculo(x, z, angulo, -0.9f, 0.95f, -4.52f, 0.4f, 0.25f, 0.06f, 1.0f, 0.95f, 0.65f); // Faro izquierdo.
+        piezaVehiculo(x, z, angulo, 0.9f, 0.95f, -4.52f, 0.4f, 0.25f, 0.06f, 1.0f, 0.95f, 0.65f); // Faro derecho.
+        for (int eje = 0; eje < 2; eje++) { // Dos ejes de ruedas.
+            float lz = (eje == 0) ? -2.8f : 2.8f; // Eje delantero y trasero.
+            piezaVehiculo(x, z, angulo, -1.35f, 0.45f, lz, 0.3f, 0.9f, 1.0f, 0.06f, 0.07f, 0.08f); // Rueda izquierda.
+            piezaVehiculo(x, z, angulo, 1.35f, 0.45f, lz, 0.3f, 0.9f, 1.0f, 0.06f, 0.07f, 0.08f); // Rueda derecha.
+        }
+    }
+
+    /** Dibuja una parada de bus sobre la acera: techo plano, dos postes, vidrio trasero y asiento (frente = lado de la calle). */
+    private void dibujarParadaBus(float x, float z, float angulo) {
+        piezaVehiculo(x, z, angulo, 0, 2.7f, 0, 3.6f, 0.15f, 1.8f, 0.30f, 0.34f, 0.40f); // Techo plano.
+        piezaVehiculo(x, z, angulo, -1.7f, 1.5f, -0.75f, 0.12f, 2.4f, 0.12f, 0.55f, 0.57f, 0.60f); // Poste delantero izquierdo (la acera está en Y = 0,3).
+        piezaVehiculo(x, z, angulo, 1.7f, 1.5f, -0.75f, 0.12f, 2.4f, 0.12f, 0.55f, 0.57f, 0.60f); // Poste delantero derecho.
+        piezaVehiculo(x, z, angulo, 0, 1.5f, 0.8f, 3.4f, 1.9f, 0.05f, 0.60f, 0.85f, 0.90f); // Vidrio trasero celeste.
+        piezaVehiculo(x, z, angulo, 0, 0.85f, 0.45f, 2.4f, 0.1f, 0.4f, 0.55f, 0.35f, 0.18f); // Asiento de madera.
+        piezaVehiculo(x, z, angulo, -1.0f, 0.55f, 0.45f, 0.1f, 0.5f, 0.3f, 0.40f, 0.42f, 0.45f); // Pata izquierda del asiento.
+        piezaVehiculo(x, z, angulo, 1.0f, 0.55f, 0.45f, 0.1f, 0.5f, 0.3f, 0.40f, 0.42f, 0.45f); // Pata derecha del asiento.
+    }
+
     private void actualizarBots(float deltaTime) {
         for (int bot = 0; bot < RUTAS.length; bot++) { // Recorre los tres autos autónomos.
             if (botChoque[bot] > 0) { // Comprueba si el bot está en medio de un choque.
@@ -387,8 +478,14 @@ public class JuegoEntregas extends Iluminacion {
                 }
                 continue; // Mientras dura el choque no sigue su ruta.
             }
-            float objetivoX = RUTAS[bot][botObjetivo[bot]][0]; // Lee la X de la esquina objetivo.
-            float objetivoZ = RUTAS[bot][botObjetivo[bot]][1]; // Lee la Z de la esquina objetivo.
+            int anterior = (botObjetivo[bot] + RUTAS[bot].length - 1) % RUTAS[bot].length; // Esquina de la que viene el bot.
+            float tramoX = RUTAS[bot][botObjetivo[bot]][0] - RUTAS[bot][anterior][0]; // Dirección X del tramo actual.
+            float tramoZ = RUTAS[bot][botObjetivo[bot]][1] - RUTAS[bot][anterior][1]; // Dirección Z del tramo actual.
+            float largoTramo = (float) Math.sqrt(tramoX * tramoX + tramoZ * tramoZ); // Largo del tramo para normalizar.
+            float derechaX = -tramoZ / largoTramo; // Componente X del vector hacia la derecha del avance.
+            float derechaZ = tramoX / largoTramo; // Componente Z del vector hacia la derecha del avance.
+            float objetivoX = RUTAS[bot][botObjetivo[bot]][0] + derechaX * DESVIO_CARRIL; // Esquina objetivo desplazada al carril derecho.
+            float objetivoZ = RUTAS[bot][botObjetivo[bot]][1] + derechaZ * DESVIO_CARRIL; // Misma corrección en Z.
             float diferenciaX = objetivoX - botX[bot]; // Calcula la separación horizontal al objetivo.
             float diferenciaZ = objetivoZ - botZ[bot]; // Calcula la separación en profundidad al objetivo.
             float distancia = (float) Math.sqrt(diferenciaX * diferenciaX + diferenciaZ * diferenciaZ); // Mide la distancia restante.
@@ -407,11 +504,25 @@ public class JuegoEntregas extends Iluminacion {
 
     /** Si el jugador toca a un bot, ambos se detienen y el bot espera un instante y retrocede. */
     private void resolverChoqueBots(float previoX, float previoZ) {
-        float radioChoque = 3.0f; // Suma aproximada de los radios de los dos autos.
+        float radioChoque = 2.0f; // Radio de bloqueo físico (menor que el de choque: sqrt(5) ≈ 2,24).
         for (int bot = 0; bot < RUTAS.length; bot++) { // Revisa cada bot.
             float diferenciaX = autoX - botX[bot]; // Separación horizontal actual entre jugador y bot.
             float diferenciaZ = autoZ - botZ[bot]; // Separación en profundidad actual.
             float distanciaCuadrada = diferenciaX * diferenciaX + diferenciaZ * diferenciaZ; // Distancia al cuadrado, sin raíz.
+            if (invulnerable <= 0 && distanciaCuadrada < 5.0f) { // Choque que cuesta una vida (radio de choque al cuadrado = 5).
+                choques++; // Registra el choque.
+                velocidad = 0; // Detiene al jugador.
+                if (choques >= VIDAS_MAXIMAS) { // Sin vidas: fin de la partida.
+                    gameOver = true; // Congela el juego y activa la X roja.
+                    glfwSetWindowTitle(ventana, "¡GAME OVER! Presiona [R] para reiniciar."); // actualizar() ya no refresca el título.
+                } else { // Aún quedan vidas: reaparece conservando las monedas.
+                    autoX = spawnX; // Vuelve al punto de inicio en X.
+                    autoZ = spawnZ; // Vuelve al punto de inicio en Z.
+                    angulo = spawnAngulo; // Recupera la orientación inicial.
+                    invulnerable = 2.0f; // Dos segundos sin perder otra vida si un bot pasa por el spawn.
+                }
+                return; // Un solo choque por cuadro.
+            }
             if (distanciaCuadrada < radioChoque * radioChoque) { // Comprueba si los autos se tocan.
                 velocidad = 0; // El auto del jugador se detiene.
                 if (botChoque[bot] <= 0) { // Evita reiniciar el choque si ya está en curso.
@@ -538,13 +649,44 @@ public class JuegoEntregas extends Iluminacion {
                         dibujarPeaton(x + 4.2f, z + 4.4f, (float) Math.PI, 0, 0.8f, 0.1f, 0.1f); // Bombero de rojo inmóvil en la esquina de la acera frontal.
                         dibujarPeaton(x - 4.2f, z + 4.4f, (float) Math.PI, 0, 0.9f, 0.5f, 0.1f); // Segundo bombero con chaqueta naranja, también estático.
                     }
-                    case 6 -> { // Techo flotante con surtidores.
+                    case 6 -> { // Parada de bus: se orienta hacia la calle contigua.
+                        float anguloParada = 0; // Frente hacia -Z por defecto.
+                        float desvioParadaX = 0; // Desplazamiento hacia el borde de la acera en X.
+                        float desvioParadaZ = 0; // Desplazamiento hacia el borde de la acera en Z.
+                        if (columna + 1 < MAPA[fila].length && MAPA[fila][columna + 1] == 0) { // Calle al este.
+                            anguloParada = -(float) Math.PI / 2; desvioParadaX = 3.3f;
+                        } else if (columna > 0 && MAPA[fila][columna - 1] == 0) { // Calle al oeste.
+                            anguloParada = (float) Math.PI / 2; desvioParadaX = -3.3f;
+                        } else if (fila + 1 < MAPA.length && MAPA[fila + 1][columna] == 0) { // Calle al sur.
+                            anguloParada = (float) Math.PI; desvioParadaZ = 3.3f;
+                        } else if (fila > 0 && MAPA[fila - 1][columna] == 0) { // Calle al norte.
+                            desvioParadaZ = -3.3f;
+                        }
+                        dibujarParadaBus(x + desvioParadaX, z + desvioParadaZ, anguloParada);
+                        float paradaX = x + desvioParadaX; // Centro de la parada en X.
+                        float paradaZ = z + desvioParadaZ; // Centro de la parada en Z.
+                        float senoParada = (float) Math.sin(anguloParada); // Seno de la orientación de la parada.
+                        float cosenoParada = (float) Math.cos(anguloParada); // Coseno de la misma orientación.
+                        for (int pasajero = 0; pasajero < 2; pasajero++) { // Dos pasajeros esperando bajo el techo.
+                            float lateral = (pasajero == 0) ? -0.7f : 0.7f; // Offset a izquierda o derecha dentro de la parada.
+                            float profundidad = -0.1f; // Un poco por delante del asiento, bajo el techo.
+                            float pasajeroX = paradaX + cosenoParada * lateral + senoParada * profundidad; // Convierte el offset local a mundo (X).
+                            float pasajeroZ = paradaZ - senoParada * lateral + cosenoParada * profundidad; // Convierte el offset local a mundo (Z).
+                            float mirada = anguloParada + (float) Math.sin(tiempoAnimacion * 1.3f + pasajero * 2.0f) * 0.5f; // Mira hacia la calle y gira de lado a lado, desfasado entre ambos.
+                            if (pasajero == 0) { // Primer pasajero: chaqueta verde.
+                                dibujarPeaton(pasajeroX, pasajeroZ, mirada, 0, 0.30f, 0.60f, 0.40f, false); // Tiempo 0: piernas quietas.
+                            } else { // Segundo pasajero: chaqueta naranja.
+                                dibujarPeaton(pasajeroX, pasajeroZ, mirada, 0, 0.90f, 0.45f, 0.15f, false);
+                            }
+                        }
+                    }
+                    case 7 -> { // Techo flotante con surtidores (la gasolinera pasa del id 6 al 7).
                         dibujarGasolinera(x, z); // Dibuja la estructura de la gasolinera.
                         dibujarCargaCombustible(x, z); // Añade el auto estacionado y la persona que carga combustible.
                     }
                     case 0 -> { // Calle: puede llevar un montículo de basura junto a la acera.
-                        boolean tramoHorizontal = fila % 3 == 0 && columna % 3 != 0; // Calle que corre a lo largo de X entre dos cruces.
-                        boolean tramoVertical = columna % 3 == 0 && fila % 3 != 0; // Calle que corre a lo largo de Z entre dos cruces.
+                        boolean tramoHorizontal = fila % 3 == 1 && columna % 3 != 1; // Calle que corre a lo largo de X entre dos cruces.
+                        boolean tramoVertical = columna % 3 == 1 && fila % 3 != 1; // Calle que corre a lo largo de Z entre dos cruces.
                         boolean hayBasura = (fila * 7 + columna * 13) % 23 == 5; // Selección fija (~7 % de los tramos) que no cambia entre cuadros.
                         if (hayBasura && tramoHorizontal) { // Basura en el borde sur de una calle horizontal.
                             dibujarBasura(x, z + 4);
@@ -574,7 +716,7 @@ public class JuegoEntregas extends Iluminacion {
                         dibujarSenal(x + lado * 4.4f, z + desvioZ * 1.9f, (float) Math.PI / 2); // Panel orientado hacia la calle, lejos de farolas e hidrantes.
                     }
                 }
-                if (tipo == 0 && fila >= 3 && fila <= 9 && fila % 3 == 0 && columna >= 3 && columna <= 9 && columna % 3 == 0) { // Intersección: calle cuya fila y columna son 3, 6 o 9.
+                if (tipo == 0 && fila >= 7 && fila <= 13 && fila % 3 == 1 && columna >= 7 && columna <= 13 && columna % 3 == 1) { // Intersección interior: calle cuya fila y columna son 7, 10 o 13.
                     dibujarCruce(x, z); // Dibuja los 4 pasos de cebra y los 4 semáforos del cruce.
                 }
             }
@@ -735,6 +877,7 @@ public class JuegoEntregas extends Iluminacion {
             dibujarMinimapa(); // Dibuja el segundo pase desde arriba.
         }
         dibujarHUD(velocidad, faros); // El panel de velocidad y luces se dibuja siempre, encima de todo.
+        dibujarHUDJuego(); // Vidas, monedas y Game Over.
     }
 
     /** Dibuja la misma ciudad desde arriba en un recuadro de la esquina superior derecha. */
@@ -821,6 +964,50 @@ public class JuegoEntregas extends Iluminacion {
         entero("uMapa", 0); // Recupera la proyección en perspectiva para el siguiente cuadro.
     }
 
+    /** Dibuja en 2D las vidas (arriba izquierda), las monedas (debajo) y la X roja de Game Over. */
+    private void dibujarHUDJuego() {
+        glClear(GL_DEPTH_BUFFER_BIT); // Descarta la profundidad de la escena para que el HUD quede encima.
+        entero("uMapa", 1); // Proyección ortográfica con colores directos.
+        float lado = 0.035f; // Ancho de cada icono como fracción de la pantalla.
+        float alt = lado * ancho / alto; // Altura equivalente para que el icono sea cuadrado en píxeles.
+        for (int vida = 0; vida < VIDAS_MAXIMAS; vida++) { // Una cajita por vida.
+            float fx = 0.02f + vida * (lado + 0.01f); // Separa las cajitas horizontalmente.
+            if (vida < VIDAS_MAXIMAS - choques) { // Vida disponible: roja.
+                cajaHUD(fx, 0.98f - alt, lado, alt, 0.90f, 0.12f, 0.15f, 5);
+            } else { // Vida perdida: gris.
+                cajaHUD(fx, 0.98f - alt, lado, alt, 0.35f, 0.35f, 0.38f, 5);
+            }
+        }
+        float filaY = 0.98f - alt * 2.4f; // Segunda fila, debajo de las vidas.
+        cajaHUD(0.02f, filaY, lado, alt, 1.0f, 0.85f, 0.10f, 5); // Icono amarillo de moneda.
+        for (int moneda = 0; moneda < Math.min(monedasRecolectadas, 25); moneda++) { // Una cajita pequeña por moneda (máximo 25 visibles).
+            cajaHUD(0.02f + lado + 0.01f + moneda * 0.009f, filaY + alt * 0.2f, 0.006f, alt * 0.6f, 1.0f, 0.85f, 0.10f, 5);
+        }
+        if (gameOver) { // Sub-pantalla central con borde rojo y las letras "G" y "O".
+            int cuadro = (int) (Math.min(ancho, alto) * 0.6f); // Lado del viewport cuadrado: así las unidades del mundo son cuadradas en píxeles.
+            int centroX = ancho / 2; // Centro horizontal de la ventana en píxeles.
+            int centroY = alto / 2; // Centro vertical de la ventana en píxeles.
+            float k = LIMITE_HUD / 67.0f; // Escala: el panel se diseñó para un rango de ±67 y el rango actual es ±LIMITE_HUD.
+            glViewport(centroX - cuadro / 2, centroY - cuadro / 2, cuadro, cuadro); // Dentro de este viewport el mundo va de -LIMITE_HUD a LIMITE_HUD.
+            caja(0, 6, 0, 126 * k, 0.1f, 76 * k, 0.90f, 0.05f, 0.05f); // Borde rojo, ligeramente más grande que el panel.
+            caja(0, 7, 0, 120 * k, 0.1f, 70 * k, 0.08f, 0.08f, 0.08f); // Panel gris muy oscuro (y mayor = más cerca de la cámara).
+            float rojo = 1.0f, verde = 0.1f, azul = 0.1f; // Rojo brillante de las letras.
+            float letraX = -22 * k; // Centro de la letra G (izquierda del centro).
+            caja(letraX, 8, -15 * k, 24 * k, 0.1f, 6 * k, rojo, verde, azul); // G: barra superior.
+            caja(letraX - 9 * k, 8, 0, 6 * k, 0.1f, 36 * k, rojo, verde, azul); // G: barra izquierda.
+            caja(letraX, 8, 15 * k, 24 * k, 0.1f, 6 * k, rojo, verde, azul); // G: barra inferior.
+            caja(letraX + 9 * k, 8, 7.5f * k, 6 * k, 0.1f, 15 * k, rojo, verde, azul); // G: barra derecha-inferior.
+            caja(letraX + 4.5f * k, 8, 0, 12 * k, 0.1f, 6 * k, rojo, verde, azul); // G: palito central.
+            letraX = 22 * k; // Centro de la letra O (derecha del centro).
+            caja(letraX, 8, -15 * k, 24 * k, 0.1f, 6 * k, rojo, verde, azul); // O: arriba.
+            caja(letraX, 8, 15 * k, 24 * k, 0.1f, 6 * k, rojo, verde, azul); // O: abajo.
+            caja(letraX - 9 * k, 8, 0, 6 * k, 0.1f, 36 * k, rojo, verde, azul); // O: izquierda.
+            caja(letraX + 9 * k, 8, 0, 6 * k, 0.1f, 36 * k, rojo, verde, azul); // O: derecha.
+            glViewport(0, 0, ancho, alto); // Recupera la ventana completa.
+        }
+        entero("uMapa", 0); // Recupera la perspectiva para el siguiente cuadro.
+    }
+
     /** Dibuja una señal de tránsito: poste gris delgado y panel verde plano en la parte superior (2 cajas). */
     private void dibujarSenal(float x, float z, float angulo) {
         cajaGirada(x, 1.5f, z, 0.12f, 2.4f, 0.12f, 0.55f, 0.57f, 0.60f, angulo); // Poste vertical gris sobre la acera.
@@ -829,12 +1016,12 @@ public class JuegoEntregas extends Iluminacion {
 
     /** Dibuja una marca cian y una punta blanca por encima de los edificios del minimapa. */
     private void dibujarIndicadorAuto() {
-        cajaGirada(autoX, 25, autoZ, 2.2f, 0.1f, 3.2f, 0.1f, 1, 1, angulo); // Marca la posición con un rectángulo cian orientado.
+        cajaGirada(autoX, 25, autoZ, 4.4f, 0.1f, 6.4f, 0.1f, 1, 1, angulo); // Marca la posición con un rectángulo cian orientado.
         float frenteX = -(float) Math.sin(angulo); // Calcula la dirección frontal en el eje X.
         float frenteZ = -(float) Math.cos(angulo); // Calcula la dirección frontal en el eje Z.
-        float puntaX = autoX + frenteX * 2; // Desplaza la punta dos unidades hacia delante en X.
-        float puntaZ = autoZ + frenteZ * 2; // Desplaza la punta dos unidades hacia delante en Z.
-        caja(puntaX, 26, puntaZ, 0.9f, 0.1f, 0.9f, 1, 1, 1); // Dibuja la punta blanca encima del indicador cian.
+        float puntaX = autoX + frenteX * 4; // Desplaza la punta dos unidades hacia delante en X.
+        float puntaZ = autoZ + frenteZ * 4; // Desplaza la punta dos unidades hacia delante en Z.
+        caja(puntaX, 26, puntaZ, 1.8f, 0.1f, 1.8f, 1, 1, 1); // Dibuja la punta blanca encima del indicador cian.
     }
 
     /** Punto de entrada del proyecto final. */
