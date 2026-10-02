@@ -13,6 +13,8 @@ public class JuegoEntregas extends Iluminacion {
 
     // ==================== 1. ESTADO DEL JUEGO ====================
     private boolean mostrarMapa = true; // Muestra el minimapa desde el inicio.
+    private boolean enInicio = true; // Cuando es true el juego espera en la pantalla de inicio.
+    private boolean tituloInicioPuesto = false; // Evita reescribir el título de inicio en cada cuadro.
     private boolean enPausa = false; // Cuando es true el juego se congela y el título muestra los controles.
     private int entregas = 0; // Cuenta las entregas completadas; también identifica el siguiente destino.
     private float tiempo = 0; // Acumula los segundos de la partida hasta completar el recorrido.
@@ -34,6 +36,34 @@ public class JuegoEntregas extends Iluminacion {
     private float monedaZ = PUNTOS_MONEDA[0][1]; // Posición Z actual de la moneda.
     private static final float LIMITE_HUD = 107; // Mitad del rango que el shader del minimapa convierte a pantalla (LIMITE 105 + 2).
     private int monedasRecolectadas = 0; // Cuenta las monedas que ha recogido el jugador.
+
+    // ==================== PÍLDORAS (POWER-UPS) ====================
+    private float pildoraAzulX = 30.0f, pildoraAzulZ = -30.0f; // Píldora azul (inmunidad).
+    private float pildoraNaranjaX = 0.0f, pildoraNaranjaZ = -30.0f; // Píldora naranja (velocidad); se reubican al aparecer.
+    private boolean pildorasVisibles = false; // Las dos píldoras aparecen y desaparecen juntas.
+    private float timerSpawnPildoras = 30.0f; // Segundos hasta la próxima aparición.
+    private float timerVidaPildoras = 0.0f; // Segundos que le quedan a las píldoras visibles antes de desaparecer.
+    private float timerFantasma = 0.0f; // Segundos restantes en que el jugador traspasa a los bots (píldora morada).
+    private float timerVelocidad = 0.0f; // Segundos restantes del efecto de velocidad.
+    private static final float VELOCIDAD_PILDORA = 120 / 3.6f; // 120 km/h en unidades por segundo.
+
+    // ==================== PATRULLA PERSEGUIDORA ====================
+    private float poliX = 0f, poliZ = 0f, poliAngulo = 0f; // Posición y orientación (radianes) de la patrulla perseguidora.
+    private boolean poliPersiguiendo = false; // Cuando es true la patrulla existe y persigue al jugador.
+    private float timerPoli = 0f; // Segundos restantes de la persecución.
+    private float poliDestinoX = 0f, poliDestinoZ = 0f; // Próximo punto al que se dirige la patrulla (siempre sobre una calle).
+    private boolean poliTieneDestino = false; // false obliga a elegir un nuevo destino.
+    private static final float VELOCIDAD_POLI = 15.0f; // Velocidad de la patrulla: menor que los 16,7 u/s (60 km/h) del jugador, así que puede escapar.
+
+    // ==================== NIVELES Y VICTORIA ====================
+    private static final int MAX_BOTS = 15; // Tamaño de todos los arreglos de bots (los "bots ocultos" se procesan solo si están activos).
+    private static final int MONEDAS_VICTORIA = 20; // Monedas necesarias para ganar.
+    private int nivel = 1; // Nivel actual (1 a 3).
+    private boolean victoria = false; // Cuando es true el juego se congela y se muestra la V.
+    private int botsActivos = 5; // Cantidad de bots que se mueven, dibujan y pueden chocar.
+    private float radioColision = 5.0f; // Umbral de choque que quita vida, en distancia al cuadrado (5.0 = radio de 2,24 unidades).
+    private float velBots = 10.0f; // Velocidad global de los bots; 10 equivale a la velocidad base de cada bot.
+    private float timerMensaje = 0.0f; // Segundos restantes del aviso de subida de nivel.
 
     // ==================== VIDAS Y GAME OVER ====================
     private static final int VIDAS_MAXIMAS = 3; // Choques permitidos antes del Game Over.
@@ -57,7 +87,17 @@ public class JuegoEntregas extends Iluminacion {
         {{-60, -60}, {60, -60}, {60, 60}, {-60, 60}}, // Bot 1 (camión de bomberos): vuelta completa por las calles del borde.
         {{30, -60}, {30, -30}, {60, -30}, {60, -60}}, // Bot 2 (ambulancia): circuito pequeño en el sector noreste.
         {{-60, 0}, {-30, 0}, {-30, 30}, {-60, 30}}, // Bot 3 (civil): circuito en el sector oeste.
-        {{30, 0}, {60, 0}, {60, 60}, {30, 60}} // Bot 4 (civil): circuito en el sector sureste.
+        {{30, 0}, {60, 0}, {60, 60}, {30, 60}}, // Bot 4 (civil): circuito en el sector sureste.
+        {{-60, -30}, {-30, -30}, {-30, 0}, {-60, 0}}, // Bot 5 (civil).
+        {{30, 30}, {60, 30}, {60, 60}, {30, 60}}, // Bot 6 (civil).
+        {{-60, 30}, {-30, 30}, {-30, 60}, {-60, 60}}, // Bot 7 (civil).
+        {{0, -60}, {30, -60}, {30, -30}, {0, -30}}, // Bot 8 (civil).
+        {{-30, -60}, {0, -60}, {0, -30}, {-30, -30}}, // Bot 9 (civil).
+        {{0, 0}, {30, 0}, {30, 30}, {0, 30}}, // Bot 10 (civil).
+        {{-30, 0}, {0, 0}, {0, 30}, {-30, 30}}, // Bot 11 (civil).
+        {{-60, -60}, {-30, -60}, {-30, -30}, {-60, -30}}, // Bot 12 (civil).
+        {{0, 30}, {30, 30}, {30, 60}, {0, 60}}, // Bot 13 (civil).
+        {{0, 60}, {-30, 60}, {-30, 30}, {0, 30}} // Bot 14 (civil): nace lejos del punto de inicio del jugador.
     };
     private static final float LIMITE_RUTA_BUS = 90.0f; // Eje del anillo de asfalto por el que da la vuelta el bus (celdas 1 y 19).
     private static final float DESVIO_BUS = 2.5f; // Desplazamiento hacia el carril derecho (hacia dentro del anillo).
@@ -67,13 +107,18 @@ public class JuegoEntregas extends Iluminacion {
     private float busAngulo = -(float) Math.PI / 2; // Orientación en radianes: mirando hacia +X.
     private int estadoBus = 0; // 0 = hacia +X, 1 = hacia +Z, 2 = hacia -X, 3 = hacia -Z.
     private static final float DESVIO_CARRIL = 2.5f; // Distancia lateral al eje de la calle: los bots circulan por su carril derecho.
-    private final float[] botX = {-30, 60, 30, -60, 30}; // Posición X inicial de cada bot: justo en una esquina de su ruta.
-    private final float[] botZ = {-30, 60, -60, 0, 0}; // Posición Z inicial de cada bot.
-    private final float[] botAngulo = {0, 0, 0, 0, 0}; // Orientación en radianes; se recalcula en cada cuadro.
-    private final float[] botVelocidad = {7, 9, 6, 5, 8}; // Unidades por segundo de cada bot.
-    private final float[] botChoque = new float[5]; // Segundos restantes del choque de cada bot: primero espera, luego retrocede.
-    private final int[] botObjetivo = {1, 3, 1, 1, 1}; // Índice de la esquina hacia la que avanza cada bot.
-    private final float[][] botColor = {{0.95f, 0.80f, 0.15f}, {0.20f, 0.70f, 0.30f}, {0.60f, 0.30f, 0.85f}, {0.15f, 0.40f, 0.85f}, {0.90f, 0.90f, 0.92f}}; // Los dos últimos son los civiles: azul y blanco.
+    private final float[] botX = {-30, 60, 30, -60, 30, -60, 30, -60, 0, -30, 0, -30, -60, 0, 0}; // Posición X inicial de cada bot: justo en una esquina de su ruta.
+    private final float[] botZ = {-30, 60, -60, 0, 0, -30, 30, 30, -60, -60, 0, 0, -60, 30, 60}; // Posición Z inicial de cada bot.
+    private final float[] botAngulo = new float[MAX_BOTS]; // Orientación en radianes; se recalcula en cada cuadro.
+    private final float[] botVelocidad = {7, 9, 6, 5, 8, 6, 7, 5, 8, 6, 7, 5, 9, 6, 8}; // Unidades por segundo de cada bot.
+    private final float[] botChoque = new float[MAX_BOTS]; // Segundos restantes del choque de cada bot: primero espera, luego retrocede.
+    private final int[] botObjetivo = {1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}; // Índice de la esquina hacia la que avanza cada bot.
+    private final float[] botXInicial = botX.clone(); // Copia de las posiciones X originales para reiniciar.
+    private final float[] botZInicial = botZ.clone(); // Copia de las posiciones Z originales.
+    private final int[] botObjetivoInicial = botObjetivo.clone(); // Copia de las esquinas objetivo originales.
+    private final float[][] botColor = {{0.95f, 0.80f, 0.15f}, {0.20f, 0.70f, 0.30f}, {0.60f, 0.30f, 0.85f}, {0.15f, 0.40f, 0.85f}, {0.90f, 0.90f, 0.92f},
+        {0.85f, 0.25f, 0.20f}, {0.95f, 0.55f, 0.15f}, {0.30f, 0.75f, 0.80f}, {0.55f, 0.55f, 0.60f}, {0.80f, 0.30f, 0.60f},
+        {0.25f, 0.30f, 0.65f}, {0.60f, 0.80f, 0.25f}, {0.40f, 0.25f, 0.20f}, {0.95f, 0.85f, 0.40f}, {0.20f, 0.20f, 0.25f}}; // Del bot 3 en adelante son civiles.
 
     // ==================== PEATONES EN LAS ACERAS ====================
     private final float[] peatonX = {-30, 30, 0, -30, -30, 30, 0, 0, 30, -30}; // Posición X inicial de cada peatón (en el centro de su recorrido).
@@ -114,13 +159,18 @@ public class JuegoEntregas extends Iluminacion {
         if (key == GLFW_KEY_M) { // Comprueba si se pulsó la tecla del mapa.
             mostrarMapa = !mostrarMapa; // Alterna entre mostrar y ocultar la vista superior.
         }
-        if (key == GLFW_KEY_P && !gameOver) { // Comprueba si se pulsó la tecla de pausa (no aplica en Game Over).
-            enPausa = !enPausa; // Alterna entre pausa y juego.
-            if (enPausa) { // Al pausar, el título pasa a ser la ayuda de controles.
-                glfwSetWindowTitle(ventana, "PAUSA (P: continuar) - Controles: WASD/flechas mover, Espacio freno, C camara, F luces, N dia/noche, M mapa, R reiniciar, ESC salir");
-            } // Al reanudar, actualizarTitulo() de Vehiculo restaura el título normal en el siguiente cuadro.
+        if (key == GLFW_KEY_SPACE || key == GLFW_KEY_ENTER) { // Espacio o Enter: iniciar o pausar.
+            if (enInicio) {
+                enInicio = false; // Comienza el juego; actualizarTitulo() restaura el título normal.
+            } else if (!gameOver && !victoria) {
+                enPausa = !enPausa; // Alterna la pausa.
+                if (enPausa) { // El título solo se fija al pausar porque actualizar() está detenido.
+                    glfwSetWindowTitle(ventana, "JUEGO PAUSADO");
+                }
+            }
         }
     }
+    
 
     /** Reinicia el vehículo y el progreso de las entregas. */
     @Override // Amplía el reinicio definido en clase2.
@@ -129,10 +179,22 @@ public class JuegoEntregas extends Iluminacion {
         entregas = 0; // Vuelve a seleccionar la primera parada.
         tiempo = 0; // Reinicia el cronómetro de la partida.
         monedasRecolectadas = 0; // Vuelve a contar las monedas desde cero.
+        nivel = 1; victoria = false; botsActivos = 5; radioColision = 5.0f; velBots = 10.0f; timerMensaje = 0; // Vuelve al nivel 1.
         choques = 0; // Restaura las tres vidas.
         gameOver = false; // Sale de la pantalla de Game Over.
         enPausa = false; // Quita la pausa si estaba activa.
-        invulnerable = 0; // Cancela la gracia pendiente.
+        pildorasVisibles = false; timerSpawnPildoras = 30.0f; timerVelocidad = 0; timerFantasma = 0; // Cancela los power-ups.
+        poliPersiguiendo = false; poliTieneDestino = false; timerPoli = 0; // Retira la patrulla perseguidora.
+        velocidadMaxima = 60 / 3.6f; aceleracionMotor = 14;
+        invulnerable = 2.0f; // Dos segundos de gracia por si un bot queda cerca del punto de inicio.
+        for (int bot = 0; bot < MAX_BOTS; bot++) { // Devuelve los 15 bots (activos y ocultos) a su estado original.
+            botX[bot] = botXInicial[bot];
+            botZ[bot] = botZInicial[bot];
+            botAngulo[bot] = 0;
+            botObjetivo[bot] = botObjetivoInicial[bot]; // Esquina objetivo original (1 en casi todos; 3 en el bot 1).
+            botChoque[bot] = 0; // Cancela choques pendientes.
+        }
+        java.util.Arrays.fill(peatonAplastado, 0); // Los peatones aplastados vuelven a la normalidad.
         busX = -CARRIL_BUS; // Devuelve el bus a la esquina superior izquierda del anillo.
         busZ = -CARRIL_BUS;
         busAngulo = -(float) Math.PI / 2;
@@ -141,6 +203,15 @@ public class JuegoEntregas extends Iluminacion {
         autoZ = spawnZ; // Misma corrección en profundidad.
         angulo = spawnAngulo; // Recupera la orientación inicial.
         velocidad = 0; // Detiene el auto.
+    }
+
+    /** Coloca las dos píldoras en puntos de calle distintos entre sí, de la moneda y del punto de inicio. */
+    private void reubicarPildoras() {
+        int a, b;
+        do { a = (int) (Math.random() * PUNTOS_MONEDA.length); } while (a == puntoMoneda);
+        do { b = (int) (Math.random() * PUNTOS_MONEDA.length); } while (b == puntoMoneda || b == a);
+        pildoraAzulX = PUNTOS_MONEDA[a][0]; pildoraAzulZ = PUNTOS_MONEDA[a][1];
+        pildoraNaranjaX = PUNTOS_MONEDA[b][0]; pildoraNaranjaZ = PUNTOS_MONEDA[b][1];
     }
 
     /** Mueve la moneda a un punto distinto de la lista, siempre sobre una calle. */
@@ -159,24 +230,95 @@ public class JuegoEntregas extends Iluminacion {
     /** Actualiza el vehículo y comprueba si llegó y frenó en el destino activo. */
     @Override // Añade el objetivo del juego al movimiento heredado.
     protected void actualizar(float deltaTime) {
-        if (enPausa || gameOver) { // En pausa o Game Over nada se mueve ni se actualiza.
+        if (enInicio) { // En la pantalla de inicio nada se mueve.
+            if (!tituloInicioPuesto) { // Fija el título una sola vez.
+                glfwSetWindowTitle(ventana, "Presiona ESPACIO o ENTER para iniciar");
+                tituloInicioPuesto = true;
+            }
             return;
         }
+        if (enPausa || gameOver || victoria) { // En pausa, Game Over o victoria nada se mueve ni se actualiza.
+            return;
+        }
+        if (timerMensaje > 0) timerMensaje -= deltaTime; // Descuenta el aviso de nivel (se congela en pausa).
         if (invulnerable > 0) { // Descuenta la gracia posterior a un choque.
             invulnerable -= deltaTime;
+        }
+        if (!pildorasVisibles) { // Cuenta atrás para que aparezcan las píldoras.
+            timerSpawnPildoras -= deltaTime;
+            if (timerSpawnPildoras <= 0) {
+                reubicarPildoras(); // Elige dos puntos de calle distintos.
+                pildorasVisibles = true;
+                timerVidaPildoras = 20.0f; // Permanecen 20 s en el mapa.
+                timerSpawnPildoras = 30.0f;
+            }
+        } else { // Visibles: cuenta atrás para desaparecer si nadie las recoge.
+            timerVidaPildoras -= deltaTime;
+            if (timerVidaPildoras <= 0) {
+                pildorasVisibles = false;
+            }
+        }
+        if (timerFantasma > 0) timerFantasma -= deltaTime; // Descuenta el efecto de traspasar autos.
+        if (timerVelocidad > 0) { // Efecto de velocidad activo.
+            timerVelocidad -= deltaTime;
+            velocidadMaxima = VELOCIDAD_PILDORA; // Tope de 120 km/h.
+            aceleracionMotor = 30; // Con 14 no llegaría: el equilibrio es aceleración / 0,7.
+        } else { // Valores normales.
+            velocidadMaxima = 60 / 3.6f;
+            aceleracionMotor = 14;
         }
         float autoXPrevio = autoX; // Guarda la posición X del jugador antes de moverlo.
         float autoZPrevio = autoZ; // Guarda la posición Z del jugador antes de moverlo.
         super.actualizar(deltaTime); // Procesa aceleración, giro, colisiones y título de la ventana.
         actualizarBus(deltaTime); // Da la vuelta al anillo perimetral por su carril derecho.
+        if (poliPersiguiendo) { // IA de la patrulla: persigue al jugador hasta que expire el tiempo o lo embista.
+            timerPoli -= deltaTime;
+            if (timerPoli <= 0) {
+                poliPersiguiendo = false;
+            } else {
+                avanzarPatrulla(deltaTime); // Persigue siguiendo las calles (no atraviesa edificios).
+                float dx = autoX - poliX; // Vector hacia el jugador tras avanzar.
+                float dz = autoZ - poliZ;
+                if (timerFantasma <= 0 && invulnerable <= 0 && dx * dx + dz * dz < radioColision) { // Embestida: cuesta una vida.
+                    perderVida();
+                    poliPersiguiendo = false;
+                }
+            }
+        }
+        if (gameOver) { // La patrulla acabó con las vidas: nada más debe resolverse en este cuadro.
+            return;
+        }
         actualizarBots(deltaTime); // Mueve el tráfico autónomo, incluso cuando el juego ya terminó.
         resolverChoqueBots(autoXPrevio, autoZPrevio); // Detiene al jugador y al bot si se tocan.
+        if (gameOver) { // Evita cobrar monedas o ganar en el mismo cuadro del Game Over.
+            return;
+        }
         float dx = autoX - monedaX; // Separación horizontal entre el auto y la moneda (autoX viene de Vehiculo).
         float dz = autoZ - monedaZ; // Separación en profundidad entre el auto y la moneda.
         float distCuadrada = dx * dx + dz * dz; // Distancia al cuadrado, sin calcular raíz.
         if (distCuadrada < 25.0f) { // Radio de recolección de 5 unidades: cubre toda la marca de 6x6.
             monedasRecolectadas++; // Suma una moneda al contador.
+            if (monedasRecolectadas == 5 && nivel == 1) { // Sube al nivel 2.
+                nivel = 2; botsActivos = 10; radioColision = 7.0f; velBots = 15.0f; timerMensaje = 3.0f; invulnerable = Math.max(invulnerable, 2.0f);
+            } else if (monedasRecolectadas == 10 && nivel == 2) { // Sube al nivel 3.
+                nivel = 3; botsActivos = 15; radioColision = 9.0f; velBots = 20.0f; timerMensaje = 3.0f; invulnerable = Math.max(invulnerable, 2.0f);
+            } else if (monedasRecolectadas == MONEDAS_VICTORIA) { // Fin del juego.
+                victoria = true;
+                glfwSetWindowTitle(ventana, "¡VICTORIA! Recogiste las 20 monedas. Presiona [R] para jugar otra vez.");
+            }
             reubicarMoneda(); // Mueve la moneda a otro punto de la ciudad.
+        }
+        if (pildorasVisibles) { // Recogida de píldoras: al tomar una desaparecen ambas.
+            float distAzul = (autoX - pildoraAzulX) * (autoX - pildoraAzulX) + (autoZ - pildoraAzulZ) * (autoZ - pildoraAzulZ);
+            float distNaranja = (autoX - pildoraNaranjaX) * (autoX - pildoraNaranjaX) + (autoZ - pildoraNaranjaZ) * (autoZ - pildoraNaranjaZ);
+            if (distAzul < 9.0f) { // Inmunidad: invulnerable ya impide perder vidas.
+                invulnerable = 20.0f;
+                timerFantasma = 20.0f; // También permite traspasar a los bots.
+                pildorasVisibles = false;
+            } else if (distNaranja < 9.0f) { // Velocidad.
+                timerVelocidad = 20.0f;
+                pildorasVisibles = false;
+            }
         }
         actualizarMascotas(deltaTime); // Mueve perros y gatos dentro de sus parques.
         actualizarPeatones(deltaTime); // Hace patrullar a los peatones por las aceras.
@@ -195,18 +337,24 @@ public class JuegoEntregas extends Iluminacion {
     }
 
     /** Compone el progreso que se añade al título de la ventana. */
+    @Override // Envía al shader los faros de bots y bus además de los del auto principal.
+    protected void prepararLuces() {
+        super.prepararLuces(); // Conserva farolas y faros del auto principal.
+        enviarFarosVehiculo(0, busX, busZ, busAngulo, 4.6f, 0.9f); // El bus ocupa el índice 0.
+        for (int bot = 0; bot < botsActivos; bot++) { // Un foco doble por cada bot activo (índices 1 a botsActivos).
+            float delante = (bot == 1) ? 2.4f : (bot == 2) ? 2.1f : 1.36f; // Bomberos y ambulancia son más largos.
+            float lado = (bot == 1) ? 0.6f : 0.55f; // Separación lateral de los faros.
+            enviarFarosVehiculo(bot + 1, botX[bot], botZ[bot], botAngulo[bot], delante, lado);
+        }
+        entero("uVehN", noche ? botsActivos + 1 : 0); // De noche se activan todos; de día ninguno.
+    }
+
     @Override // Amplía los indicadores de día/noche y faros de Iluminacion.
     protected String estadoExtra() {
         String mensaje = super.estadoExtra(); // Recupera los indicadores de iluminación.
-        mensaje += " | M: mapa | "; // Muestra la tecla que alterna el minimapa.
-        if (entregas == DESTINOS.length) { // Selecciona el texto de victoria al completar las tres paradas.
-            mensaje += "GANASTE en " + (int) tiempo + " s! R: jugar otra vez"; // Muestra tiempo final y opción de reinicio.
-        } else { // Durante el recorrido muestra progreso e instrucciones.
-            mensaje += "Entregas " + entregas + "/3"; // Indica cuántas paradas se completaron.
-            mensaje += " | Frena en la marca dorada | " + (int) tiempo + " s"; // Explica la condición de entrega y el tiempo.
-        }
-        mensaje += " | Vidas: " + (VIDAS_MAXIMAS - choques) + " | [P] Pausar [R] Reiniciar"; // Muestra las vidas restantes y los controles.
-        mensaje += " | Monedas: " + monedasRecolectadas; // Muestra cuántas monedas lleva el jugador.
+        mensaje += " | M: mapa"; // Muestra la tecla que alterna el minimapa.
+        mensaje += " | Nivel: " + nivel + " | Monedas: " + monedasRecolectadas + " | Vidas: " + (VIDAS_MAXIMAS - choques); // Solo nivel, monedas y vidas.
+        mensaje += " | [Espacio/Enter] Pausar [R] Reiniciar"; // Controles vigentes.
         return mensaje; // Entrega el texto a actualizarTitulo() de clase2.
     }
 
@@ -221,8 +369,17 @@ public class JuegoEntregas extends Iluminacion {
         }
         // La marca pequeña de la parada (dibujarDestino) ya no se dibuja; las entregas siguen funcionando igual.
         dibujarMoneda(monedaX, monedaZ, tiempoAnimacion * 2, tiempoAnimacion); // Dibuja la moneda: marca amarilla y cubo flotante giratorio.
+        if (pildorasVisibles) { // Cubos giratorios que flotan: morada = inmunidad, naranja = velocidad.
+            float lado = vistaMapa ? 7.0f : 2.2f; // Más grandes: en el minimapa deben verse con claridad.
+            float flote = 1.6f + (float) Math.sin(tiempoAnimacion * 3.0f) * 0.2f;
+            cajaGirada(pildoraAzulX, flote, pildoraAzulZ, lado, lado, lado, 0.65f, 0.15f, 0.90f, tiempoAnimacion * 2); // Morada (inmunidad).
+            cajaGirada(pildoraNaranjaX, flote, pildoraNaranjaZ, lado, lado, lado, 1.0f, 0.5f, 0.0f, tiempoAnimacion * 2); // Naranja (velocidad).
+        }
+        if (poliPersiguiendo) { // Patrulla perseguidora con sirenas que alternan 10 veces por segundo.
+            dibujarAutoPolicia(poliX, poliZ, poliAngulo, tiempoAnimacion * 2.5f); // dibujarAutoPolicia usa (int)(tiempo * 4) % 2.
+        }
         dibujarBus(busX, busZ, busAngulo, tiempoAnimacion); // Dibuja el bus del anillo, también en el minimapa.
-        for (int bot = 0; bot < RUTAS.length; bot++) { // Dibuja cada auto autónomo, también en el minimapa.
+        for (int bot = 0; bot < botsActivos; bot++) { // Dibuja cada auto autónomo, también en el minimapa.
             if (bot == 0) { // El primer bot es la patrulla de policía.
                 dibujarAutoPolicia(botX[bot], botZ[bot], botAngulo[bot], tiempoAnimacion);
             } else if (bot == 1) { // El segundo bot es el camión de bomberos.
@@ -254,6 +411,20 @@ public class JuegoEntregas extends Iluminacion {
             float diferenciaZ = autoZ - peatonZ[peaton]; // Separación en profundidad entre ambos.
             if (peatonAplastado[peaton] == 0 && diferenciaX * diferenciaX + diferenciaZ * diferenciaZ < 9.0f) { // Radio de colisión de 3 unidades.
                 peatonAplastado[peaton] = 0.01f; // Inicia el aplastamiento.
+                if (!poliPersiguiendo) { // Un atropello llama a la patrulla.
+                    poliPersiguiendo = true;
+                    timerPoli = 30.0f;
+                    float candidatoX = Math.max(-90.0f, Math.min(90.0f, autoX + 40.0f)); // Punto a 40 unidades, dentro del mapa.
+                    float calleX = Math.round(candidatoX / 30.0f) * 30.0f; // Calle vertical más cercana (las calles están cada 30 unidades: -90 a 90).
+                    float calleZ = Math.round(Math.max(-90.0f, Math.min(90.0f, autoZ)) / 30.0f) * 30.0f; // Calle horizontal más cercana.
+                    if (Math.abs(candidatoX - calleX) <= Math.abs(autoZ - calleZ)) { // Está más cerca de una calle vertical:
+                        poliX = calleX; poliZ = Math.max(-90.0f, Math.min(90.0f, autoZ)); // se centra en ella y conserva su Z.
+                    } else { // Está más cerca de una calle horizontal:
+                        poliX = candidatoX; poliZ = calleZ; // se centra en ella y conserva su X.
+                    }
+                    poliTieneDestino = false; // Elige ruta desde cero.
+                    poliAngulo = (float) Math.atan2(-(autoX - poliX), -(autoZ - poliZ)); // Nace mirando al jugador.
+                }
             }
             if (peatonAplastado[peaton] > 0) { // Comprueba si el peatón está aplastado.
                 peatonAplastado[peaton] += deltaTime; // Cuenta los segundos que lleva aplastado.
@@ -469,7 +640,7 @@ public class JuegoEntregas extends Iluminacion {
     }
 
     private void actualizarBots(float deltaTime) {
-        for (int bot = 0; bot < RUTAS.length; bot++) { // Recorre los tres autos autónomos.
+        for (int bot = 0; bot < botsActivos; bot++) { // Recorre solo los autos autónomos activos.
             if (botChoque[bot] > 0) { // Comprueba si el bot está en medio de un choque.
                 botChoque[bot] -= deltaTime; // Consume el tiempo del choque.
                 if (botChoque[bot] < 1.1f) { // Tras una breve espera detenido, empieza a retroceder.
@@ -477,6 +648,24 @@ public class JuegoEntregas extends Iluminacion {
                     botZ[bot] += (float) Math.cos(botAngulo[bot]) * 3 * deltaTime; // Retrocede en Z (opuesto al frente -cos).
                 }
                 continue; // Mientras dura el choque no sigue su ruta.
+            }
+            float dBusX = busX - botX[bot]; // Radar del bus.
+            float dBusZ = busZ - botZ[bot];
+            boolean puedeAvanzar = dBusX * dBusX + dBusZ * dBusZ >= 100.0f; // Frena si el bus está a menos de 10 unidades.
+            if (puedeAvanzar && poliPersiguiendo) { // Radar de la patrulla.
+                float dPoliX = poliX - botX[bot];
+                float dPoliZ = poliZ - botZ[bot];
+                puedeAvanzar = dPoliX * dPoliX + dPoliZ * dPoliZ >= 100.0f;
+            }
+            for (int j = 0; puedeAvanzar && j < bot; j++) { // Anti-deadlock: solo cede el paso a bots de índice menor.
+                float dBotX = botX[j] - botX[bot];
+                float dBotZ = botZ[j] - botZ[bot];
+                if (dBotX * dBotX + dBotZ * dBotZ < 35.0f) {
+                    puedeAvanzar = false;
+                }
+            }
+            if (!puedeAvanzar) { // Se queda quieto este cuadro (equivale a envolver el movimiento en if (puedeAvanzar)).
+                continue;
             }
             int anterior = (botObjetivo[bot] + RUTAS[bot].length - 1) % RUTAS[bot].length; // Esquina de la que viene el bot.
             float tramoX = RUTAS[bot][botObjetivo[bot]][0] - RUTAS[bot][anterior][0]; // Dirección X del tramo actual.
@@ -489,7 +678,7 @@ public class JuegoEntregas extends Iluminacion {
             float diferenciaX = objetivoX - botX[bot]; // Calcula la separación horizontal al objetivo.
             float diferenciaZ = objetivoZ - botZ[bot]; // Calcula la separación en profundidad al objetivo.
             float distancia = (float) Math.sqrt(diferenciaX * diferenciaX + diferenciaZ * diferenciaZ); // Mide la distancia restante.
-            float paso = botVelocidad[bot] * deltaTime; // Distancia que avanza en este cuadro.
+            float paso = botVelocidad[bot] * velBots / 10.0f * deltaTime; // Distancia que avanza en este cuadro.
             if (distancia <= paso) { // Comprueba si alcanza la esquina en este cuadro.
                 botX[bot] = objetivoX; // Se coloca exactamente sobre la esquina.
                 botZ[bot] = objetivoZ; // Evita que el error se acumule y se salga del asfalto.
@@ -502,14 +691,76 @@ public class JuegoEntregas extends Iluminacion {
         }
     }
 
+    /** Mueve la patrulla por la cuadrícula de calles (cada 30 unidades, de -90 a 90) en dirección al jugador. */
+    private void avanzarPatrulla(float deltaTime) {
+        float calleX = Math.round(Math.max(-90.0f, Math.min(90.0f, poliX)) / 30.0f) * 30.0f; // Calle vertical más cercana.
+        float calleZ = Math.round(Math.max(-90.0f, Math.min(90.0f, poliZ)) / 30.0f) * 30.0f; // Calle horizontal más cercana.
+        boolean enCalleH = Math.abs(poliZ - calleZ) < 4.5f; // Dentro de la franja de una calle horizontal (ancho útil de ±4,5).
+        boolean enCalleV = Math.abs(poliX - calleX) < 4.5f; // Dentro de la franja de una calle vertical.
+        boolean alineado = (enCalleH && Math.abs(autoZ - calleZ) < 4.5f) || (enCalleV && Math.abs(autoX - calleX) < 4.5f); // Jugador en la misma calle.
+        if (alineado) { // Misma calle: recta hasta el jugador (queda dentro de la franja, sin tocar manzanas).
+            poliDestinoX = autoX;
+            poliDestinoZ = autoZ;
+            poliTieneDestino = true;
+        } else if (!poliTieneDestino) { // Elige el siguiente cruce.
+            float nodoX = calleX, nodoZ = calleZ; // Cruce más cercano.
+            if ((poliX - nodoX) * (poliX - nodoX) + (poliZ - nodoZ) * (poliZ - nodoZ) > 0.25f) { // Aún no está en un cruce: va primero a él.
+                poliDestinoX = nodoX;
+                poliDestinoZ = nodoZ;
+            } else { // Está en un cruce: avanza un tramo por el eje más alejado del jugador.
+                float difX = autoX - nodoX;
+                float difZ = autoZ - nodoZ;
+                float sigX = Math.max(-90.0f, Math.min(90.0f, nodoX + 30.0f * Math.signum(difX)));
+                float sigZ = Math.max(-90.0f, Math.min(90.0f, nodoZ + 30.0f * Math.signum(difZ)));
+                if (Math.abs(difX) >= Math.abs(difZ) && sigX != nodoX) { // Eje X.
+                    poliDestinoX = sigX; poliDestinoZ = nodoZ;
+                } else if (sigZ != nodoZ) { // Eje Z.
+                    poliDestinoX = nodoX; poliDestinoZ = sigZ;
+                } else { // Sin movimiento posible en Z: usa X.
+                    poliDestinoX = sigX; poliDestinoZ = nodoZ;
+                }
+            }
+            poliTieneDestino = true;
+        }
+        float difDestX = poliDestinoX - poliX;
+        float difDestZ = poliDestinoZ - poliZ;
+        float distancia = (float) Math.sqrt(difDestX * difDestX + difDestZ * difDestZ);
+        float paso = VELOCIDAD_POLI * deltaTime;
+        if (distancia <= paso) { // Llegó: se coloca en el punto y elige otro destino en el siguiente cuadro.
+            poliX = poliDestinoX;
+            poliZ = poliDestinoZ;
+            poliTieneDestino = false;
+        } else {
+            poliAngulo = (float) Math.atan2(-difDestX, -difDestZ); // Frente = (-sen, -cos).
+            poliX -= (float) Math.sin(poliAngulo) * paso;
+            poliZ -= (float) Math.cos(poliAngulo) * paso;
+        }
+    }
+
+    /** Resta una vida: Game Over si no quedan, o reaparición con dos segundos de gracia. */
+    private void perderVida() {
+        choques++;
+        velocidad = 0;
+        if (choques >= VIDAS_MAXIMAS) {
+            gameOver = true;
+            glfwSetWindowTitle(ventana, "¡GAME OVER! Presiona [R] para reiniciar.");
+        } else {
+            autoX = spawnX; autoZ = spawnZ; angulo = spawnAngulo;
+            invulnerable = Math.max(invulnerable, 2.0f);
+        }
+    }
+
     /** Si el jugador toca a un bot, ambos se detienen y el bot espera un instante y retrocede. */
     private void resolverChoqueBots(float previoX, float previoZ) {
+        if (timerFantasma > 0) { // Con la píldora morada el jugador atraviesa a los bots sin bloquearlos ni dañarse.
+            return;
+        }
         float radioChoque = 2.0f; // Radio de bloqueo físico (menor que el de choque: sqrt(5) ≈ 2,24).
-        for (int bot = 0; bot < RUTAS.length; bot++) { // Revisa cada bot.
+        for (int bot = 0; bot < botsActivos; bot++) { // Revisa solo los bots activos.
             float diferenciaX = autoX - botX[bot]; // Separación horizontal actual entre jugador y bot.
             float diferenciaZ = autoZ - botZ[bot]; // Separación en profundidad actual.
             float distanciaCuadrada = diferenciaX * diferenciaX + diferenciaZ * diferenciaZ; // Distancia al cuadrado, sin raíz.
-            if (invulnerable <= 0 && distanciaCuadrada < 5.0f) { // Choque que cuesta una vida (radio de choque al cuadrado = 5).
+            if (invulnerable <= 0 && distanciaCuadrada < radioColision) { // Choque que cuesta una vida (distancia al cuadrado según el nivel).
                 choques++; // Registra el choque.
                 velocidad = 0; // Detiene al jugador.
                 if (choques >= VIDAS_MAXIMAS) { // Sin vidas: fin de la partida.
@@ -519,7 +770,7 @@ public class JuegoEntregas extends Iluminacion {
                     autoX = spawnX; // Vuelve al punto de inicio en X.
                     autoZ = spawnZ; // Vuelve al punto de inicio en Z.
                     angulo = spawnAngulo; // Recupera la orientación inicial.
-                    invulnerable = 2.0f; // Dos segundos sin perder otra vida si un bot pasa por el spawn.
+                    invulnerable = Math.max(invulnerable, 2.0f); // Dos segundos sin perder otra vida si un bot pasa por el spawn.
                 }
                 return; // Un solo choque por cuadro.
             }
@@ -906,8 +1157,9 @@ public class JuegoEntregas extends Iluminacion {
             glDisable(GL_SCISSOR_TEST); // Permite que la próxima limpieza abarque toda la pantalla.
             glViewport(0, 0, ancho, alto); // Recupera el área de dibujo de la ventana completa.
         }
-        if (glGetError() != GL_NO_ERROR) { // Comprueba que el pase del mapa no haya generado errores OpenGL.
-            throw new IllegalStateException("Error OpenGL en minimapa"); // Expone el error en la consola.
+        int err = glGetError(); // Consulta el error pendiente de OpenGL.
+        if (err != GL_NO_ERROR) {
+            System.err.println("Error OpenGL ignorado para estabilidad: " + err); // Solo informa en consola.
         }
     }
 
@@ -934,7 +1186,7 @@ public class JuegoEntregas extends Iluminacion {
         entero("uMapa", 1); // Reutiliza la proyección ortográfica del minimapa y los colores directos sin iluminación.
         try { // Garantiza que el estado de dibujo se restaure aunque algo falle.
             cajaHUD(0.05f, 0.50f, 0.90f, 0.30f, 0.30f, 0.30f, 0.32f, 1); // Marco gris de la barra de velocidad.
-            float proporcion = Math.min(Math.abs(velocidad) / 16f, 1f); // 16 es la velocidad máxima de avance.
+            float proporcion = Math.min(Math.abs(velocidad) / velocidadMaxima, 1f); // Se adapta al tope actual (60 o 120 km/h).
             float rojo = 0.15f; // Color verde por defecto cuando se avanza.
             float verde = 0.85f; // Componente verde del color de avance.
             if (velocidad < 0) { // En reversa la barra se vuelve roja.
@@ -956,10 +1208,18 @@ public class JuegoEntregas extends Iluminacion {
             glDisable(GL_SCISSOR_TEST); // Permite dibujar en toda la ventana.
             glViewport(0, 0, ancho, alto); // Recupera el área completa.
         }
-        if (enPausa) { // En pausa se dibuja el icono ⏸ en el centro de la pantalla.
-            glClear(GL_DEPTH_BUFFER_BIT); // Descarta la profundidad de la escena para que las barras queden encima.
-            cajaHUD(0.45f, 0.42f, 0.03f, 0.16f, 1, 1, 1, 5); // Primera barra blanca vertical.
-            cajaHUD(0.52f, 0.42f, 0.03f, 0.16f, 1, 1, 1, 5); // Segunda barra blanca vertical.
+        if (enInicio) { // Pantalla de inicio: panel oscuro con un triángulo de Play hecho con columnas escalonadas.
+            glClear(GL_DEPTH_BUFFER_BIT); // Descarta la profundidad para que el panel quede encima.
+            cajaHUD(0.28f, 0.25f, 0.44f, 0.50f, 0.04f, 0.04f, 0.07f, 6); // Panel oscuro (opaco: el shader no usa transparencia).
+            for (int columna = 0; columna < 4; columna++) { // Cuatro columnas de altura decreciente hacia la derecha.
+                float altura = 0.28f - columna * 0.07f; // 0,28; 0,21; 0,14; 0,07.
+                cajaHUD(0.42f + columna * 0.045f, 0.50f - altura / 2, 0.045f, altura, 0.1f, 1.0f, 0.2f, 7); // Verde brillante centrado en vertical.
+            }
+        } else if (enPausa) { // Pausa: panel oscuro con las dos barras del icono.
+            glClear(GL_DEPTH_BUFFER_BIT);
+            cajaHUD(0.35f, 0.32f, 0.30f, 0.36f, 0.04f, 0.04f, 0.07f, 6); // Panel oscuro central.
+            cajaHUD(0.43f, 0.42f, 0.04f, 0.16f, 1, 1, 1, 7); // Primera barra blanca vertical.
+            cajaHUD(0.53f, 0.42f, 0.04f, 0.16f, 1, 1, 1, 7); // Segunda barra blanca vertical.
         }
         entero("uMapa", 0); // Recupera la proyección en perspectiva para el siguiente cuadro.
     }
@@ -1003,6 +1263,45 @@ public class JuegoEntregas extends Iluminacion {
             caja(letraX, 8, 15 * k, 24 * k, 0.1f, 6 * k, rojo, verde, azul); // O: abajo.
             caja(letraX - 9 * k, 8, 0, 6 * k, 0.1f, 36 * k, rojo, verde, azul); // O: izquierda.
             caja(letraX + 9 * k, 8, 0, 6 * k, 0.1f, 36 * k, rojo, verde, azul); // O: derecha.
+            glViewport(0, 0, ancho, alto); // Recupera la ventana completa.
+        }
+        if (!gameOver && (timerMensaje > 0 || victoria)) { // Panel central: aviso de nivel o pantalla de victoria.
+            int cuadro = (int) (Math.min(ancho, alto) * 0.6f); // Lado del viewport cuadrado.
+            float k = LIMITE_HUD / 67.0f; // Misma escala que el panel de Game Over.
+            glViewport(ancho / 2 - cuadro / 2, alto / 2 - cuadro / 2, cuadro, cuadro);
+            if (victoria) { // Panel verde con una V dorada formada por escalones de cajas.
+                caja(0, 6, 0, 126 * k, 0.1f, 76 * k, 1.0f, 0.85f, 0.10f); // Borde dorado.
+                caja(0, 7, 0, 120 * k, 0.1f, 70 * k, 0.05f, 0.45f, 0.15f); // Panel verde oscuro.
+                for (int i = 0; i < 6; i++) { // Seis escalones: bajan hacia el centro por ambos lados.
+                    float px = (27 - i * 5.4f) * k; // Distancia horizontal al centro en este escalón.
+                    float pz = (-22.5f + i * 9) * k; // Altura del escalón (z negativo = arriba).
+                    caja(-px, 8, pz, 9 * k, 0.1f, 9 * k, 1.0f, 0.95f, 0.30f); // Brazo izquierdo de la V.
+                    caja(px, 8, pz, 9 * k, 0.1f, 9 * k, 1.0f, 0.95f, 0.30f); // Brazo derecho de la V.
+                }
+            } else { // Aviso temporal de subida de nivel: letra L y número.
+                caja(0, 6, 0, 126 * k, 0.1f, 76 * k, 1.0f, 0.85f, 0.10f); // Borde amarillo.
+                caja(0, 7, 0, 120 * k, 0.1f, 70 * k, 0.08f, 0.08f, 0.08f); // Panel oscuro.
+                float r = 1.0f, g = 0.95f, b = 0.15f; // Amarillo brillante.
+                float lx = -22 * k; // Centro de la letra L.
+                caja(lx - 9 * k, 8, 0, 6 * k, 0.1f, 36 * k, r, g, b); // L: barra vertical.
+                caja(lx, 8, 15 * k, 24 * k, 0.1f, 6 * k, r, g, b); // L: barra inferior.
+                float nx = 22 * k; // Centro del dígito.
+                if (nivel == 1) { // Dígito 1: barra vertical con base.
+                    caja(nx, 8, 0, 6 * k, 0.1f, 36 * k, r, g, b);
+                    caja(nx, 8, 15 * k, 16 * k, 0.1f, 6 * k, r, g, b);
+                } else if (nivel == 2) { // Dígito 2: forma de Z curva.
+                    caja(nx, 8, -15 * k, 24 * k, 0.1f, 6 * k, r, g, b); // Arriba.
+                    caja(nx + 9 * k, 8, -7.5f * k, 6 * k, 0.1f, 15 * k, r, g, b); // Derecha superior.
+                    caja(nx, 8, 0, 24 * k, 0.1f, 6 * k, r, g, b); // Centro.
+                    caja(nx - 9 * k, 8, 7.5f * k, 6 * k, 0.1f, 15 * k, r, g, b); // Izquierda inferior.
+                    caja(nx, 8, 15 * k, 24 * k, 0.1f, 6 * k, r, g, b); // Abajo.
+                } else { // Dígito 3: tres barras y lado derecho.
+                    caja(nx, 8, -15 * k, 24 * k, 0.1f, 6 * k, r, g, b);
+                    caja(nx, 8, 0, 24 * k, 0.1f, 6 * k, r, g, b);
+                    caja(nx, 8, 15 * k, 24 * k, 0.1f, 6 * k, r, g, b);
+                    caja(nx + 9 * k, 8, 0, 6 * k, 0.1f, 36 * k, r, g, b);
+                }
+            }
             glViewport(0, 0, ancho, alto); // Recupera la ventana completa.
         }
         entero("uMapa", 0); // Recupera la perspectiva para el siguiente cuadro.

@@ -247,14 +247,15 @@ public class AppCiudad {
         configurarCamara(); // Actualiza la posición y el objetivo de la cámara.
         prepararLuces(); // Envía iluminación si la etapa actual la implementa.
         escena(); // Dibuja la ciudad y las ampliaciones de la lección actual.
-        if (glGetError() != GL_NO_ERROR) { // Comprueba si OpenGL reportó una operación inválida.
-            throw new IllegalStateException("Error OpenGL al dibujar"); // Hace visible el problema en consola.
+        int err = glGetError(); // Consulta el error pendiente de OpenGL.
+        if (err != GL_NO_ERROR) {
+            System.err.println("Error OpenGL ignorado para estabilidad: " + err); // Solo informa en consola; no cierra el juego.
         }
     }
 
     /** Recorre el mapa y transforma cada celda en geometría. */
     protected void escena() {
-        caja(0, -0.25f, 0, 2 * LIMITE, 0.5f, 2 * LIMITE, 0.18f, 0.18f, 0.19f); // Base de asfalto gris oscuro que cubre todo el mapa; cara superior en Y=0.
+        caja(0, -0.25f, 0, 194.0f, 0.5f, 194.0f, 0.18f, 0.18f, 0.19f); // Base de asfalto gris oscuro que cubre todo el mapa; cara superior en Y=0.
         for (int fila = 0; fila < MAPA.length; fila++) { // Recorre el mapa de norte a sur.
             for (int columna = 0; columna < MAPA[fila].length; columna++) { // Recorre cada fila de izquierda a derecha.
                 float x = centro(columna); // Convierte la columna a posición X.

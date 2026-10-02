@@ -13,6 +13,8 @@ public class Vehiculo extends AppCiudad {
     protected float autoX = -30; // Posición horizontal inicial: centro de una calle.
     protected float autoZ = 30; // Posición inicial sobre el eje que recorre el fondo de la ciudad.
     protected float angulo = 0; // Orientación en radianes; cero apunta hacia -Z.
+    protected float velocidadMaxima = 60 / 3.6f; // Tope de avance en unidades por segundo (60 km/h); los power-ups lo modifican.
+    protected float aceleracionMotor = 14; // Aceleración del motor en u/s²; debe superar velocidadMaxima * 0,7 para alcanzar el tope.
     protected float velocidad = 0; // Unidades por segundo; un valor negativo significa reversa.
     protected boolean camaraAerea = false; // false: seguir el auto; true: observar toda la ciudad.
     protected static final float RADIO_AUTO = 1.65f; // Radio que contiene al vehículo para las colisiones.
@@ -56,7 +58,7 @@ public class Vehiculo extends AppCiudad {
             acelerador -= 1; // Primero reduce la velocidad positiva y después entra en reversa.
         }
 
-        velocidad += acelerador * 9 * deltaTime; // Integra la aceleración de 9 unidades por segundo cuadrado.
+        velocidad += acelerador * aceleracionMotor * deltaTime; // Integra la aceleración de 14 unidades por segundo cuadrado (con la resistencia de 0,7 alcanza el tope).
         float resistencia = 0.7f; // Define la pérdida de velocidad normal al rodar.
 
         if (pulsada(GLFW_KEY_SPACE)) { // Detecta si el usuario mantiene presionado el freno.
@@ -65,7 +67,7 @@ public class Vehiculo extends AppCiudad {
 
         float factorFrenado = (float) Math.exp(-resistencia * deltaTime); // Calcula la fracción de velocidad conservada.
         velocidad *= factorFrenado; // Aplica resistencia de forma proporcional al tiempo transcurrido.
-        velocidad = Math.max(-6, Math.min(16, velocidad)); // Limita la reversa a -6 y el avance a 16.
+        velocidad = Math.max(-6, Math.min(velocidadMaxima, velocidad)); // Limita la reversa a -6 y el avance a 60 km/h (≈16,7 u/s).
         float direccion = 0; // Sin dirección presionada el volante permanece recto.
 
         if (pulsada(GLFW_KEY_A) || pulsada(GLFW_KEY_LEFT)) { // Comprueba el giro hacia la izquierda.

@@ -87,6 +87,13 @@ public class Iluminacion extends Vehiculo {
         vector("uFrente", frenteX, 0, frenteZ); // Envía la dirección frontal del vehículo.
     }
 
+    /** Envía al shader los focos de un vehículo autónomo (índice 0 a 15). */
+    protected void enviarFarosVehiculo(int indice, float x, float z, float anguloVehiculo, float delante, float lado) {
+        vector("uVehPos[" + indice + "]", x, 0.68f, z); // Centro del vehículo a la altura de los faros.
+        vector("uVehFrente[" + indice + "]", -(float) Math.sin(anguloVehiculo), 0, -(float) Math.cos(anguloVehiculo)); // Frente local = -Z.
+        vector("uVehDim[" + indice + "]", delante, lado, 0); // Distancia al frente y separación lateral de los faros.
+    }
+
     // ==================== 4. MODELOS DE LAS FAROLAS ====================
 
     /** Dibuja postes y bombillas en las mismas posiciones usadas para calcular la luz. */
@@ -130,6 +137,10 @@ public class Iluminacion extends Vehiculo {
             uniform vec3 uLuces[49]; // Recibe las posiciones de las 49 farolas.
             uniform vec3 uAuto; // Recibe la posición del auto a la altura de los faros.
             uniform vec3 uFrente; // Recibe la dirección hacia la que apunta el vehículo.
+            uniform vec3 uVehPos[16]; // Recibe el centro de cada vehículo autónomo a la altura de sus faros.
+            uniform vec3 uVehFrente[16]; // Recibe la dirección frontal de cada vehículo autónomo.
+            uniform vec3 uVehDim[16]; // Recibe en x la distancia al frente y en y la separación lateral de los faros.
+            uniform int uVehN; // Recibe cuántos vehículos autónomos tienen los faros encendidos.
             uniform int uNoche; // Vale 1 de noche y 0 de día.
             uniform int uFaros; // Vale 1 cuando los focos están encendidos.
             uniform int uEmision; // Vale 1 si el objeto debe conservar su color sin oscurecerse.
@@ -181,6 +192,20 @@ public class Iluminacion extends Vehiculo {
                         float atenuacion = 1.0 + 0.04 * distancia * distancia; // Disminuye la intensidad al alejarse.
                         vec3 colorFaro = vec3(1.0, 0.94, 0.72); // Define una luz frontal blanca y cálida.
                         luz += colorFaro * cono * difusa * 8.0 / atenuacion; // Añade el aporte del foco a la iluminación total.
+                    }
+                }
+
+                for (int v = 0; v < uVehN; v++) { // Repite el cálculo de los conos para cada vehículo autónomo.
+                    vec3 lateralV = vec3(-uVehFrente[v].z, 0.0, uVehFrente[v].x); // Dirección hacia el lado derecho del vehículo.
+                    for (int lado = 0; lado < 2; lado++) { // Faro izquierdo y derecho.
+                        float sep = (lado == 0) ? -uVehDim[v].y : uVehDim[v].y; // Separación lateral con signo.
+                        vec3 origenV = uVehPos[v] + uVehFrente[v] * uVehDim[v].x + lateralV * sep; // Ubica el faro en el frente.
+                        vec3 haciaSup = vMundo - origenV; // Vector del faro al fragmento.
+                        float distV = length(haciaSup); // Distancia recorrida por la luz.
+                        vec3 ejeV = normalize(uVehFrente[v] + vec3(0.0, -0.10, 0.0)); // Inclina el haz hacia el suelo.
+                        float conoV = smoothstep(0.85, 0.97, dot(normalize(haciaSup), ejeV)); // Suaviza el borde del haz.
+                        float difusaV = max(dot(normal, -normalize(haciaSup)), 0.0); // Cuánto mira la cara hacia el faro.
+                        luz += vec3(1.0, 0.94, 0.72) * conoV * difusaV * 8.0 / (1.0 + 0.04 * distV * distV); // Suma el aporte del foco.
                     }
                 }
 
