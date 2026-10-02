@@ -4,10 +4,10 @@ import static org.lwjgl.glfw.GLFW.*; // Permite consultar la tecla que controla 
 import static org.lwjgl.opengl.GL33.*; // Permite cambiar viewport, recorte y buffers de dibujo.
 
 /**
- * CLASE 4: CIUDAD TERMINADA, ENTREGAS Y MINIMAPA.
- * Orden de lectura: estado, controles, entregas, decoración y segundo pase de dibujo.
- * Hereda Iluminacion, que hereda clase2, que a su vez hereda clase1.
- * Los semáforos son decorativos; el ejemplo no incluye tráfico autónomo.
+- CLASE 4: CIUDAD TERMINADA, ENTREGAS Y MINIMAPA.
+- Orden de lectura: estado, controles, entregas, decoración y segundo pase de dibujo.
+- Hereda Iluminacion, que hereda clase2, que a su vez hereda clase1.
+- Los semáforos son decorativos; el ejemplo no incluye tráfico autónomo.
  */
 public class JuegoEntregas extends Iluminacion {
 
@@ -15,10 +15,13 @@ public class JuegoEntregas extends Iluminacion {
     private boolean mostrarMapa = true; // Muestra el minimapa desde el inicio.
     private int entregas = 0; // Cuenta las entregas completadas; también identifica el siguiente destino.
     private float tiempo = 0; // Acumula los segundos de la partida hasta completar el recorrido.
+    
+    // MODIFICACIÓN: Las coordenadas de los destinos se ajustan al nuevo mapa de 11x11
+    // Las calles cruzan por X/Z en -30, 0 y 30 garantizando que caen sobre asfalto.
     private static final float[][] DESTINOS = { // Cada fila contiene X y Z de una parada sobre la calle.
-        {30, -30}, // Primera entrega: esquina noreste.
-        {-30, -30}, // Segunda entrega: esquina noroeste.
-        {-30, 30} // Tercera entrega: regreso al punto inicial.
+        {-30.0f, -30.0f}, // Primera entrega: Sector Noroeste.
+        {  0.0f,  30.0f}, // Segunda entrega: Sector Sur Centro.
+        { 30.0f, -30.0f}  // Tercera entrega: Sector Noreste.
     };
 
     // ==================== 2. CONTROLES Y REINICIO ====================
@@ -110,19 +113,77 @@ public class JuegoEntregas extends Iluminacion {
                 float x = centro(columna); // Obtiene el centro horizontal de la parcela.
                 float z = centro(fila); // Obtiene el centro de la parcela en profundidad.
                 int tipo = MAPA[fila][columna]; // Lee el contenido de la celda.
-                if (tipo == 2) { // Detecta una parcela de parque.
-                    dibujarParque(x, z); // Añade árboles y un banco.
+                switch (tipo) { // Elige la decoración según el tipo de parcela.
+                    case 1 -> { // Edificio normal: la caja principal ya la dibuja AppCiudad.
+                        float altura = 5 + (fila * 3 + columna * 7) % 9; // Recupera la misma altura calculada en AppCiudad.
+                        dibujarVentanas(x, z, altura); // Coloca ventanas en sus cuatro fachadas.
+                    }
+                    case 2 -> dibujarParque(x, z); // Parque con árboles y un banco.
+                    case 3 -> dibujarFuente(x, z); // Fuente central de piedra con agua.
+                    case 4 -> dibujarPolicia(x, z); // Comisaría con sirenas en el techo.
+                    case 5 -> dibujarBomberos(x, z); // Estación roja con portón de garaje.
+                    case 6 -> dibujarGasolinera(x, z); // Techo flotante con surtidores.
+                    default -> { } // Las calles (0) no llevan decoración de parcela.
                 }
-                if (tipo == 1) { // Detecta una parcela con edificio.
-                    float altura = 5 + (fila * 3 + columna * 7) % 9; // Recupera la misma altura calculada en clase1.
-                    dibujarVentanas(x, z, altura); // Coloca ventanas en sus cuatro fachadas.
-                }
-                if (tipo != 0) { // La señalización se coloca junto a las manzanas, no en celdas de calle.
-                    dibujarPasoPeatonal(x, z); // Añade el cruce pintado sobre la calle contigua.
-                    dibujarSemaforo(x + 4, z - 4); // Coloca el semáforo dentro de la acera.
+                if (tipo == 0 && fila >= 3 && fila <= 9 && fila % 3 == 0 && columna >= 3 && columna <= 9 && columna % 3 == 0) { // Intersección: calle cuya fila y columna son 3, 6 o 9.
+                    dibujarCruce(x, z); // Dibuja los 4 pasos de cebra y los 4 semáforos del cruce.
                 }
             }
         }
+    }
+
+    /** Construye una fuente de piedra con agua azul y un surtidor animado (5 cajas). */
+    private void dibujarFuente(float x, float z) {
+        caja(x, 0.82f, z, 7, 0.9f, 7, 0.55f, 0.55f, 0.58f); // Base de piedra que forma el borde de la fuente.
+        if (noche) { // De noche el agua brilla suavemente, como las ventanas.
+            entero("uEmision", 1); // Evita que la iluminación oscurezca el agua.
+        }
+        caja(x, 1.3f, z, 5.8f, 0.1f, 5.8f, 0.15f, 0.45f, 0.85f); // Agua azul que sobresale un poco del borde.
+        entero("uEmision", 0); // Restablece el material normal.
+        caja(x, 2.0f, z, 1, 1.4f, 1, 0.50f, 0.50f, 0.53f); // Columna central de piedra.
+        caja(x, 2.8f, z, 2.2f, 0.25f, 2.2f, 0.58f, 0.58f, 0.60f); // Taza superior de la fuente.
+        float alturaChorro = 1.2f + (float) Math.sin(tiempo * 3) * 0.25f; // Hace subir y bajar el surtidor con el tiempo.
+        entero("uEmision", 1); // El chorro se ve brillante de día y de noche.
+        caja(x, 2.93f + alturaChorro / 2, z, 0.3f, alturaChorro, 0.3f, 0.45f, 0.75f, 1); // Surtidor de agua celeste.
+        entero("uEmision", 0); // Devuelve la iluminación normal a los siguientes objetos.
+    }
+
+    /** Construye la comisaría: edificio bajo y ancho con pórtico, placa y sirenas que alternan. */
+    private void dibujarPolicia(float x, float z) {
+        caja(x, 2.0f, z, 8.4f, 3.4f, 7.4f, 0.28f, 0.30f, 0.38f); // Cuerpo bajo gris azulado (unos dos pisos) sobre la acera.
+        caja(x, 3.85f, z, 8.8f, 0.3f, 7.8f, 0.16f, 0.18f, 0.25f); // Cubierta ligeramente más ancha y oscura.
+        caja(x, 1.3f, z + 3.75f, 1.8f, 2, 0.12f, 0.08f, 0.12f, 0.25f); // Puerta de entrada azul oscuro en la fachada sur.
+        caja(x, 2.65f, z + 4.3f, 3.2f, 0.2f, 1.2f, 0.10f, 0.15f, 0.40f); // Toldo o pórtico que sobresale sobre la entrada.
+        caja(x, 3.15f, z + 3.76f, 1.2f, 0.6f, 0.08f, 0.95f, 0.80f, 0.15f); // Placa amarilla que simula el escudo en la fachada.
+        caja(x - 2.8f, 1.9f, z + 3.72f, 1.4f, 1, 0.08f, 0.55f, 0.70f, 0.85f); // Ventana izquierda de la fachada.
+        caja(x + 2.8f, 1.9f, z + 3.72f, 1.4f, 1, 0.08f, 0.55f, 0.70f, 0.85f); // Ventana derecha de la fachada.
+        boolean rojoEncendido = (int) (tiempo * 4) % 2 == 0; // Alterna cuál sirena brilla cuatro veces por segundo.
+        entero("uEmision", rojoEncendido ? 1 : 0); // La sirena roja brilla en las fases pares.
+        caja(x - 1.2f, 4.3f, z, 1, 0.6f, 1, 0.9f, 0.1f, 0.1f); // Sirena roja sobre el techo.
+        entero("uEmision", rojoEncendido ? 0 : 1); // La sirena azul brilla cuando la roja se apaga.
+        caja(x + 1.2f, 4.3f, z, 1, 0.6f, 1, 0.1f, 0.25f, 0.95f); // Sirena azul sobre el techo.
+        entero("uEmision", 0); // Devuelve la iluminación normal a los siguientes objetos.
+    }
+
+    /** Construye la estación de bomberos: edificio bajo y ancho con dos portones, techo saliente y torre. */
+    private void dibujarBomberos(float x, float z) {
+        caja(x, 2.1f, z, 8.8f, 3.6f, 7.4f, 0.80f, 0.12f, 0.10f); // Cuerpo bajo rojo llamativo (unos dos pisos).
+        caja(x, 4.05f, z, 9.6f, 0.3f, 8.2f, 0.45f, 0.06f, 0.06f); // Techo más ancho que sobresale de las paredes.
+        caja(x - 2.2f, 1.5f, z + 3.75f, 3.4f, 2.4f, 0.12f, 0.18f, 0.18f, 0.20f); // Primer portón gris oscuro del garaje.
+        caja(x + 2.2f, 1.5f, z + 3.75f, 3.4f, 2.4f, 0.12f, 0.18f, 0.18f, 0.20f); // Segundo portón para otro camión.
+        caja(x, 3.2f, z + 3.72f, 8, 0.35f, 0.06f, 0.90f, 0.90f, 0.88f); // Franja blanca sobre los portones.
+        caja(x + 3.3f, 5.6f, z - 2.4f, 1.4f, 2.8f, 1.4f, 0.60f, 0.10f, 0.10f); // Torre pequeña de secado de mangueras.
+        caja(x + 3.3f, 7.1f, z - 2.4f, 1.7f, 0.2f, 1.7f, 0.30f, 0.05f, 0.05f); // Remate oscuro de la torre.
+    }
+
+    /** Construye la gasolinera: techo flotante sobre dos columnas con dos surtidores (6 cajas). */
+    private void dibujarGasolinera(float x, float z) {
+        caja(x, 4.2f, z, 8, 0.35f, 6, 0.92f, 0.92f, 0.94f); // Techo plano flotante blanco.
+        caja(x, 4.45f, z, 8.2f, 0.15f, 6.2f, 0.90f, 0.70f, 0.10f); // Banda amarilla sobre el borde del techo.
+        caja(x - 3, 2.25f, z, 0.3f, 3.9f, 0.3f, 0.35f, 0.37f, 0.40f); // Columna fina izquierda.
+        caja(x + 3, 2.25f, z, 0.3f, 3.9f, 0.3f, 0.35f, 0.37f, 0.40f); // Columna fina derecha.
+        caja(x - 1.2f, 1.1f, z, 0.7f, 1.6f, 0.5f, 0.85f, 0.15f, 0.10f); // Surtidor rojo izquierdo.
+        caja(x + 1.2f, 1.1f, z, 0.7f, 1.6f, 0.5f, 0.15f, 0.55f, 0.20f); // Surtidor verde derecho.
     }
 
     /** Construye cuatro árboles y un banco utilizando cajas. */
@@ -157,43 +218,60 @@ public class JuegoEntregas extends Iluminacion {
         entero("uEmision", 0); // Restablece la iluminación normal de los demás elementos.
     }
 
-    /** Dibuja las franjas blancas sobre la calle contigua al norte de la manzana. */
-    private void dibujarPasoPeatonal(float x, float z) {
-        for (int desplazamiento = -3; desplazamiento <= 3; desplazamiento++) { // Coloca siete franjas paralelas.
-            caja(x + desplazamiento, 0.045f, z - 8, 0.45f, 0.04f, 2, 0.85f, 0.87f, 0.83f); // Eleva la pintura un poco sobre el suelo.
+    /** Dibuja en una intersección 4 pasos de cebra (uno por entrada) y 4 semáforos en sus esquinas. */
+    private void dibujarCruce(float x, float z) {
+        for (int desplazamiento = -3; desplazamiento <= 3; desplazamiento++) { // Siete franjas por cada paso de cebra.
+            caja(x + desplazamiento, 0.045f, z - 7.5f, 0.45f, 0.04f, 2, 0.85f, 0.87f, 0.83f); // Entrada norte: se cruza a lo largo de X.
+            caja(x + desplazamiento, 0.045f, z + 7.5f, 0.45f, 0.04f, 2, 0.85f, 0.87f, 0.83f); // Entrada sur: se cruza a lo largo de X.
+            caja(x - 7.5f, 0.045f, z + desplazamiento, 2, 0.04f, 0.45f, 0.85f, 0.87f, 0.83f); // Entrada oeste: se cruza a lo largo de Z.
+            caja(x + 7.5f, 0.045f, z + desplazamiento, 2, 0.04f, 0.45f, 0.85f, 0.87f, 0.83f); // Entrada este: se cruza a lo largo de Z.
         }
-    }
 
-    /** Construye un semáforo decorativo que alterna rojo, verde y amarillo cada 12 segundos. */
-    private void dibujarSemaforo(float x, float z) {
-        caja(x, 1.7f, z, 0.18f, 2.8f, 0.18f, 0.18f, 0.20f, 0.22f); // Dibuja el poste sobre la acera.
-        caja(x, 3.1f, z, 0.55f, 1.2f, 0.45f, 0.08f, 0.10f, 0.12f); // Dibuja la carcasa de las tres luces.
-        int fase = (int) (tiempo % 12); // Repite un ciclo de segundos comprendidos entre 0 y 11.
-        for (int indice = 0; indice < 3; indice++) { // Recorre rojo arriba, amarillo al centro y verde abajo.
-            boolean encendida = false; // Parte de una bombilla apagada.
-            if (indice == 0) { // Selecciona la bombilla roja.
-                encendida = fase < 5; // Mantiene rojo durante los primeros cinco segundos.
-            } else if (indice == 1) { // Selecciona la bombilla amarilla.
-                encendida = fase >= 10; // Mantiene amarillo en los últimos dos segundos del ciclo.
-            } else { // Selecciona la bombilla verde.
-                encendida = fase >= 5 && fase < 10; // Mantiene verde durante los cinco segundos intermedios.
+        int faseNorteSur = (int) (tiempo % 12); // Ciclo de 12 s para el tráfico que circula en dirección Z.
+        int faseEsteOeste = (int) ((tiempo + 6) % 12); // El tráfico en X va desfasado medio ciclo respecto al de Z.
+        for (int signoX = -1; signoX <= 1; signoX += 2) { // Elige la esquina oeste (-1) o este (+1).
+            for (int signoZ = -1; signoZ <= 1; signoZ += 2) { // Elige la esquina norte (-1) o sur (+1).
+                float postesX = x + signoX * 5.6f; // Coloca el poste sobre la acera de la manzana diagonal.
+                float postesZ = z + signoZ * 5.6f; // Coloca el poste en la misma esquina, en profundidad.
+                caja(postesX, 1.7f, postesZ, 0.18f, 2.8f, 0.18f, 0.18f, 0.20f, 0.22f); // Dibuja el poste sobre la acera.
+                caja(postesX, 3.1f, postesZ, 0.5f, 1.2f, 0.5f, 0.08f, 0.10f, 0.12f); // Dibuja la carcasa con una cara hacia cada calle.
+                for (int eje = 0; eje < 2; eje++) { // Eje 0: cara que mira a Z; eje 1: cara que mira a X.
+                    int fase = faseNorteSur; // Parte de la fase del tráfico en Z.
+                    if (eje == 1) { // Comprueba si se dibuja la cara orientada a X.
+                        fase = faseEsteOeste; // Usa la fase desfasada del otro sentido.
+                    }
+                    for (int indice = 0; indice < 3; indice++) { // Recorre rojo arriba, amarillo al centro y verde abajo.
+                        boolean encendida = false; // Parte de una bombilla apagada.
+                        if (indice == 0) { // Selecciona la bombilla roja.
+                            encendida = fase < 5; // Mantiene rojo durante los primeros cinco segundos.
+                        } else if (indice == 1) { // Selecciona la bombilla amarilla.
+                            encendida = fase >= 10; // Mantiene amarillo en los últimos dos segundos del ciclo.
+                        } else { // Selecciona la bombilla verde.
+                            encendida = fase >= 5 && fase < 10; // Mantiene verde durante los cinco segundos intermedios.
+                        }
+                        float brillo = 0.15f; // Conserva un color tenue cuando la bombilla está apagada.
+                        entero("uEmision", 0); // Configura inicialmente una superficie sin emisión.
+                        if (encendida) { // Comprueba si esta bombilla corresponde a la fase activa.
+                            brillo = 1; // Usa intensidad completa para su color.
+                            entero("uEmision", 1); // Hace que la bombilla se vea encendida.
+                        }
+                        float rojo = 0; // Componente roja inicialmente ausente.
+                        float verde = 0; // Componente verde inicialmente ausente.
+                        if (indice < 2) { // Rojo y amarillo necesitan componente roja.
+                            rojo = brillo; // Añade rojo con la intensidad elegida.
+                        }
+                        if (indice > 0) { // Amarillo y verde necesitan componente verde.
+                            verde = brillo; // Añade verde; rojo más verde produce amarillo.
+                        }
+                        float altura = 3.45f - indice * 0.35f; // Separa verticalmente las tres bombillas.
+                        if (eje == 0) { // Cara que mira hacia el centro del cruce a lo largo de Z.
+                            caja(postesX, altura, postesZ - signoZ * 0.27f, 0.28f, 0.25f, 0.06f, rojo, verde, 0.02f); // Bombilla en la cara norte o sur.
+                        } else { // Cara que mira hacia el centro del cruce a lo largo de X.
+                            caja(postesX - signoX * 0.27f, altura, postesZ, 0.06f, 0.25f, 0.28f, rojo, verde, 0.02f); // Bombilla en la cara oeste o este.
+                        }
+                    }
+                }
             }
-            float brillo = 0.15f; // Conserva un color tenue cuando la bombilla está apagada.
-            entero("uEmision", 0); // Configura inicialmente una superficie sin emisión.
-            if (encendida) { // Comprueba si esta bombilla corresponde a la fase activa.
-                brillo = 1; // Usa intensidad completa para su color.
-                entero("uEmision", 1); // Hace que la bombilla se vea encendida.
-            }
-            float rojo = 0; // Componente roja inicialmente ausente.
-            float verde = 0; // Componente verde inicialmente ausente.
-            if (indice < 2) { // Rojo y amarillo necesitan componente roja.
-                rojo = brillo; // Añade rojo con la intensidad elegida.
-            }
-            if (indice > 0) { // Amarillo y verde necesitan componente verde.
-                verde = brillo; // Añade verde; rojo más verde produce amarillo.
-            }
-            float altura = 3.45f - indice * 0.35f; // Separa verticalmente las tres bombillas.
-            caja(x, altura, z - 0.24f, 0.28f, 0.25f, 0.06f, rojo, verde, 0.02f); // Dibuja la bombilla frente a la carcasa.
         }
         entero("uEmision", 0); // Evita que el siguiente objeto herede la emisión del semáforo.
     }

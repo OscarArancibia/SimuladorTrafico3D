@@ -12,16 +12,11 @@ public class Iluminacion extends Vehiculo {
     // ==================== 1. ESTADO Y POSICIONES DE LAS LUCES ====================
     protected boolean noche = true; // Inicia la escena con iluminación nocturna.
     protected boolean faros = true; // Inicia los focos del auto encendidos.
-    protected static final float[][] LUCES = { // Cada fila contiene la posición X, Y, Z de una bombilla.
-        {-24, 4.5f, -24}, // Farola de la manzana noroeste.
-        {-4, 4.5f, -24}, // Farola de la manzana norte central.
-        {16, 4.5f, -24}, // Farola de la manzana noreste.
-        {-24, 4.5f, -4}, // Farola de la manzana oeste central.
-        {-4, 4.5f, -4}, // Farola de la manzana central.
-        {16, 4.5f, -4}, // Farola de la manzana este central.
-        {-24, 4.5f, 16}, // Farola de la manzana suroeste.
-        {-4, 4.5f, 16}, // Farola de la manzana sur central.
-        {16, 4.5f, 16} // Farola de la manzana sureste.
+    protected static final float[][] LUCES = { // Cada fila contiene X, Y, Z de una bombilla: 20 farolas sobre las aceras junto a las calles verticales.
+        {-35.5f, 4.5f, -45}, {-24.5f, 4.5f, -45}, {-5.5f, 4.5f, -45}, {5.5f, 4.5f, -45}, {24.5f, 4.5f, -45}, {35.5f, 4.5f, -45}, // Farolas junto a las calles en Z = -45.
+        {-35.5f, 4.5f, -15}, {-24.5f, 4.5f, -15}, {24.5f, 4.5f, -15}, {35.5f, 4.5f, -15}, // Farolas junto a las calles en Z = -15.
+        {-35.5f, 4.5f, 15}, {-24.5f, 4.5f, 15}, {24.5f, 4.5f, 15}, {35.5f, 4.5f, 15}, // Farolas junto a las calles en Z = 15.
+        {-35.5f, 4.5f, 45}, {-24.5f, 4.5f, 45}, {-5.5f, 4.5f, 45}, {5.5f, 4.5f, 45}, {24.5f, 4.5f, 45}, {35.5f, 4.5f, 45} // Farolas junto a las calles en Z = 45.
     };
 
     // ==================== 2. CONTROLES E INDICADORES ====================
@@ -32,6 +27,7 @@ public class Iluminacion extends Vehiculo {
         super.tecla(key); // Conserva ESC, C y R.
         if (key == GLFW_KEY_N) { // Comprueba la tecla de cambio de ambiente.
             noche = !noche; // Alterna entre noche y día.
+            faros = noche; // Los faros del auto se encienden de noche y se apagan de día.
         }
         if (key == GLFW_KEY_F) { // Comprueba el interruptor de los focos del auto.
             faros = !faros; // Enciende los faros si estaban apagados y viceversa.
@@ -67,7 +63,7 @@ public class Iluminacion extends Vehiculo {
         }
         entero("uEmision", 0); // Hace que los objetos normales reciban iluminación.
 
-        for (int indice = 0; indice < LUCES.length; indice++) { // Recorre las nueve bombillas.
+        for (int indice = 0; indice < LUCES.length; indice++) { // Recorre todas las bombillas (20).
             float x = LUCES[indice][0]; // Lee la coordenada horizontal de la bombilla.
             float y = LUCES[indice][1]; // Lee su altura sobre el suelo.
             float z = LUCES[indice][2]; // Lee su coordenada en profundidad.
@@ -91,10 +87,16 @@ public class Iluminacion extends Vehiculo {
             float y = luz[1]; // Lee la altura de la bombilla.
             float z = luz[2]; // Lee la posición del poste en profundidad.
             caja(x, 2.2f, z, 0.18f, 4.4f, 0.18f, 0.20f, 0.24f, 0.28f); // Dibuja el poste delgado y oscuro.
-            if (noche) { // Las bombillas aparentan estar encendidas únicamente de noche.
+            float rojo = 0.22f; // De día: vidrio oscuro apagado (componente roja).
+            float verde = 0.24f; // De día: componente verde del vidrio apagado.
+            float azul = 0.27f; // De día: componente azul del vidrio apagado.
+            if (noche) { // Solo de noche la bombilla aparenta estar encendida.
                 entero("uEmision", 1); // Evita que la bombilla sea oscurecida por la iluminación.
+                rojo = 1; // Color cálido brillante de la bombilla encendida.
+                verde = 0.83f; // Componente verde de la luz cálida.
+                azul = 0.42f; // Componente azul de la luz cálida.
             }
-            caja(x, y, z, 0.7f, 0.35f, 0.7f, 1, 0.83f, 0.42f); // Dibuja la bombilla de color cálido.
+            caja(x, y, z, 0.7f, 0.35f, 0.7f, rojo, verde, azul); // Dibuja la bombilla, encendida o apagada según el ambiente.
             entero("uEmision", 0); // Restablece el material normal para el siguiente objeto.
         }
     }
@@ -109,7 +111,7 @@ public class Iluminacion extends Vehiculo {
             in vec3 vMundo; // Recibe la posición del fragmento en la ciudad.
             in vec3 vNormal; // Recibe la dirección perpendicular a la superficie.
             uniform vec3 uColor; // Recibe el color base de la caja.
-            uniform vec3 uLuces[9]; // Recibe las posiciones de las nueve farolas.
+            uniform vec3 uLuces[20]; // Recibe las posiciones de las 20 farolas.
             uniform vec3 uAuto; // Recibe la posición del auto a la altura de los faros.
             uniform vec3 uFrente; // Recibe la dirección hacia la que apunta el vehículo.
             uniform int uNoche; // Vale 1 de noche y 0 de día.
@@ -136,7 +138,7 @@ public class Iluminacion extends Vehiculo {
                 luz += vec3(intensidadSol) * incidenciaSol; // Suma la contribución direccional al ambiente.
 
                 if (uNoche == 1) { // Calcula la iluminación de las farolas solo de noche.
-                    for (int indice = 0; indice < 9; indice++) { // Acumula el aporte de cada bombilla.
+                    for (int indice = 0; indice < 20; indice++) { // Acumula el aporte de cada bombilla.
                         vec3 haciaLuz = uLuces[indice] - vMundo; // Forma el vector desde la superficie hacia la farola.
                         float distancia = length(haciaLuz); // Mide cuántas unidades separan superficie y bombilla.
                         float difusa = max(dot(normal, normalize(haciaLuz)), 0.0); // Calcula la incidencia de la luz sobre la cara.

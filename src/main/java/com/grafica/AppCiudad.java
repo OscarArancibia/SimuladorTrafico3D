@@ -6,7 +6,52 @@ import org.lwjgl.glfw.Callbacks; // Permite liberar los callbacks de la ventana 
 import org.lwjgl.glfw.GLFWErrorCallback; // Muestra los errores de GLFW en la consola.
 import org.lwjgl.opengl.GL; // Carga las funciones OpenGL disponibles en el equipo.
 import static org.lwjgl.glfw.GLFW.*; // Importa las funciones y constantes de ventanas y teclado.
-import static org.lwjgl.opengl.GL33.*; // Importa las funciones OpenGL hasta la versión 3.3.
+import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11.GL_DEPTH_TEST;
+import static org.lwjgl.opengl.GL11.GL_FALSE;
+import static org.lwjgl.opengl.GL11.GL_FLOAT;
+import static org.lwjgl.opengl.GL11.GL_NO_ERROR;
+import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
+import static org.lwjgl.opengl.GL11.glClear;
+import static org.lwjgl.opengl.GL11.glClearColor;
+import static org.lwjgl.opengl.GL11.glDrawArrays;
+import static org.lwjgl.opengl.GL11.glEnable;
+import static org.lwjgl.opengl.GL11.glGetError;
+import static org.lwjgl.opengl.GL11.glViewport;
+import static org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER;
+import static org.lwjgl.opengl.GL15.GL_STATIC_DRAW;
+import static org.lwjgl.opengl.GL15.glBindBuffer;
+import static org.lwjgl.opengl.GL15.glBufferData;
+import static org.lwjgl.opengl.GL15.glDeleteBuffers;
+import static org.lwjgl.opengl.GL15.glGenBuffers;
+import static org.lwjgl.opengl.GL20.GL_COMPILE_STATUS;
+import static org.lwjgl.opengl.GL20.GL_FRAGMENT_SHADER;
+import static org.lwjgl.opengl.GL20.GL_LINK_STATUS;
+import static org.lwjgl.opengl.GL20.GL_VERTEX_SHADER;
+import static org.lwjgl.opengl.GL20.glAttachShader;
+import static org.lwjgl.opengl.GL20.glCompileShader;
+import static org.lwjgl.opengl.GL20.glCreateProgram;
+import static org.lwjgl.opengl.GL20.glCreateShader;
+import static org.lwjgl.opengl.GL20.glDeleteProgram;
+import static org.lwjgl.opengl.GL20.glDeleteShader;
+import static org.lwjgl.opengl.GL20.glEnableVertexAttribArray;
+import static org.lwjgl.opengl.GL20.glGetProgramInfoLog;
+import static org.lwjgl.opengl.GL20.glGetProgrami;
+import static org.lwjgl.opengl.GL20.glGetShaderInfoLog;
+import static org.lwjgl.opengl.GL20.glGetShaderi;
+import static org.lwjgl.opengl.GL20.glGetUniformLocation;
+import static org.lwjgl.opengl.GL20.glLinkProgram;
+import static org.lwjgl.opengl.GL20.glShaderSource;
+import static org.lwjgl.opengl.GL20.glUniform1f;
+import static org.lwjgl.opengl.GL20.glUniform1i;
+import static org.lwjgl.opengl.GL20.glUniform3f;
+import static org.lwjgl.opengl.GL20.glUseProgram;
+import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
+import static org.lwjgl.opengl.GL30.glBindVertexArray;
+import static org.lwjgl.opengl.GL30.glDeleteVertexArrays;
+import static org.lwjgl.opengl.GL30.glGenVertexArrays;
+ // Importa las funciones OpenGL hasta la versión 3.3.
 
 /**
  * CLASE 1: CREAR LA CIUDAD.
@@ -26,18 +71,28 @@ public class AppCiudad {
     protected int alto = 760; // Alto inicial de la ventana; después contiene píxeles del framebuffer.
     protected float orbita = 0.6f; // Ángulo inicial de la cámara alrededor de la ciudad, en radianes.
     protected boolean vistaMapa = false; // Clase4 lo activa cuando dibuja la vista superior.
-    protected static final float LIMITE = 35; // Distancia del origen a cada borde: el mapa mide 70 unidades.
+    protected static final float LIMITE = 65.0f; // Distancia del origen a cada borde: el mapa mide 130 unidades (13 celdas x 10).
     protected static final float CELDA = 10; // Ancho y profundidad de cada celda del mapa.
     private final Map<String, Integer> uniforms = new HashMap<>(); // Evita buscar repetidamente el mismo uniform.
 
-    protected static final int[][] MAPA = { // Matriz: 0 = calle, 1 = edificio, 2 = parque.
-        {0, 0, 0, 0, 0, 0, 0}, // Fila norte: calle continua.
-        {0, 1, 0, 1, 0, 2, 0}, // Primera fila de manzanas, separadas por calles.
-        {0, 0, 0, 0, 0, 0, 0}, // Segunda avenida horizontal.
-        {0, 2, 0, 1, 0, 1, 0}, // Fila central de manzanas.
-        {0, 0, 0, 0, 0, 0, 0}, // Tercera avenida horizontal.
-        {0, 1, 0, 2, 0, 1, 0}, // Última fila de manzanas.
-        {0, 0, 0, 0, 0, 0, 0} // Calle del borde sur.
+    //0 = calle, 1 = edificio, 2 = parque, 3 = fuente, 4 = policia, 5 = bomberos, 6 = gasolinera
+
+    protected static final int[][] MAPA = {
+        
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // Borde superior (calle)
+        { 0, 1, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0},
+        { 0, 4, 1, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0}, // (2,1) = policía
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // Calle horizontal
+        { 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0},
+        { 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0},
+        { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0}, // Calle horizontal
+        { 0, 2, 2, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0},
+        { 0, 2, 2, 0, 5, 1, 0, 1, 1, 0, 1, 1, 0}, // (8,4) = bomberos
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // Calle horizontal
+        { 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 0},
+        { 0, 1, 1, 0, 1, 1, 0, 6, 1, 0, 2, 2, 0}, // (11,7) = gasolinera
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}  // Borde inferior (calle)
+    
     };
 
     // ==================== 2. INICIO, CICLO Y LIMPIEZA ====================
@@ -155,9 +210,9 @@ public class AppCiudad {
 
     /** Coloca la cámara elevada y orientada hacia el centro de la ciudad. */
     protected void configurarCamara() {
-        float camaraX = (float) Math.sin(orbita) * 65; // Calcula la posición X de una órbita de radio 65.
-        float camaraZ = (float) Math.cos(orbita) * 65; // Calcula la posición Z de esa misma órbita.
-        vector("uOjo", camaraX, 55, camaraZ); // Envía la posición de la cámara a 55 unidades de altura.
+        float camaraX = (float) Math.sin(orbita) * 105; // Calcula la posición X de una órbita de radio 105 (antes 65).
+        float camaraZ = (float) Math.cos(orbita) * 105; // Calcula la posición Z de esa misma órbita.
+        vector("uOjo", camaraX, 90, camaraZ); // Envía la posición de la cámara a 90 unidades de altura para abarcar el mapa de 130x130.
         vector("uObjetivo", 0, 0, 0); // Apunta la cámara hacia el origen del mundo.
         decimal("uAspecto", (float) ancho / alto); // Envía la proporción de la imagen para evitar deformaciones.
     }
@@ -192,7 +247,7 @@ public class AppCiudad {
 
     /** Recorre el mapa y transforma cada celda en geometría. */
     protected void escena() {
-        caja(0, -0.25f, 0, 70, 0.5f, 70, 0.16f, 0.19f, 0.23f); // Dibuja la base de asfalto con su cara superior en Y=0.
+        caja(0, -0.25f, 0, 2 * LIMITE, 0.5f, 2 * LIMITE, 0.18f, 0.18f, 0.19f); // Base de asfalto gris oscuro que cubre todo el mapa; cara superior en Y=0.
         for (int fila = 0; fila < MAPA.length; fila++) { // Recorre el mapa de norte a sur.
             for (int columna = 0; columna < MAPA[fila].length; columna++) { // Recorre cada fila de izquierda a derecha.
                 float x = centro(columna); // Convierte la columna a posición X.
@@ -208,7 +263,7 @@ public class AppCiudad {
                         float azul = 0.48f + fila * 0.025f; // Varía el tono azul según la fila.
                         caja(x, altura / 2 + 0.3f, z, 7, altura, 7, rojo, 0.40f, azul); // Coloca la base del edificio sobre la acera.
                         caja(x, altura + 0.45f, z, 7.3f, 0.3f, 7.3f, 0.20f, 0.26f, 0.32f); // Añade una cubierta más ancha y oscura.
-                    } else { // El tipo 2 representa un parque.
+                    } else if (tipo == 2 || tipo == 3) { // Los tipos 2 (parque) y 3 (fuente) llevan césped; 4, 5 y 6 solo acera.
                         caja(x, 0.32f, z, 9, 0.1f, 9, 0.20f, 0.45f, 0.28f); // Cubre la parcela con césped verde.
                     }
                 }
@@ -218,12 +273,12 @@ public class AppCiudad {
 
     /** Dibuja las líneas discontinuas de las calles dejando los cruces despejados. */
     private void dibujarMarcasCalle(int fila, int columna, float x, float z) {
-        if (fila % 2 == 0 && columna % 2 == 1) { // Identifica un tramo horizontal situado entre cruces.
+        if (fila % 3 == 0 && columna % 3 != 0) { // Tramo horizontal: fila de calle (0, 3, 6, 9, 12) entre dos cruces.
             for (int desplazamiento = -3; desplazamiento <= 3; desplazamiento += 3) { // Coloca tres marcas en la celda.
                 caja(x + desplazamiento, 0.025f, z, 1.6f, 0.03f, 0.13f, 1, 0.84f, 0.35f); // Dibuja una línea alargada en X.
             }
         }
-        if (columna % 2 == 0 && fila % 2 == 1) { // Identifica un tramo vertical situado entre cruces.
+        if (columna % 3 == 0 && fila % 3 != 0) { // Tramo vertical: columna de calle (0, 3, 6, 9, 12) entre dos cruces.
             for (int desplazamiento = -3; desplazamiento <= 3; desplazamiento += 3) { // Repite las marcas sobre ese tramo.
                 caja(x, 0.025f, z + desplazamiento, 0.13f, 0.03f, 1.6f, 1, 0.84f, 0.35f); // Dibuja una línea alargada en Z.
             }
@@ -300,8 +355,8 @@ public class AppCiudad {
                 vNormal = normalize(giro * (aNormal / uEscala)); // Corrige la normal con la inversa transpuesta de escala y giro.
 
                 if (uMapa == 1) { // Esta rama se usa al dibujar el minimapa en JuegoEntregas.
-                    float pantallaX = vMundo.x / 37.0; // Ajusta el ancho del mundo al intervalo visible -1 a 1.
-                    float pantallaY = -vMundo.z / 37.0; // Coloca el norte (-Z) en la parte superior del mapa.
+                    float pantallaX = vMundo.x / 67.0; // Ajusta el ancho del mundo (LIMITE 65 + 2) al intervalo visible -1 a 1.
+                    float pantallaY = -vMundo.z / 67.0; // Coloca el norte (-Z) en la parte superior del mapa.
                     float profundidad = -vMundo.y / 100.0; // Hace que los objetos más altos se vean por encima.
                     gl_Position = vec4(pantallaX, pantallaY, profundidad, 1.0); // Proyecta sin reducir objetos lejanos.
                 } else { // La escena principal utiliza una cámara con perspectiva.
