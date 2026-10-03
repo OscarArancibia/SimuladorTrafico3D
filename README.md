@@ -77,7 +77,7 @@ con las teclas de conducción. Escribir el mismo código otra vez lo desactiva, 
 | Código | Efecto |
 |---|---|
 | `FICCT` | Modo Dios: vidas infinitas y el auto atraviesa edificios, vehículos y peatones-patrulla (no sale del mapa) |
-| `TAN` | El auto del jugador se dibuja como un tanque |
+| `TAK` | El auto del jugador se dibuja como un tanque |
 | `POLI` | El auto del jugador se dibuja como la patrulla |
 
 Al ganar se guarda el mejor tiempo en `~/.juego3d/records.properties` y se muestra en la barra de título.
@@ -100,20 +100,3 @@ Los shaders están en `src/main/resources/shaders/` (`ciudad.vert`, `ciudad.frag
 
 Flujo de un cuadro (`Main` → `Juego`): `actualizar(dt)` mueve al jugador, el mundo y el tráfico y resuelve las reglas;
 `dibujarFrame()` dibuja la escena principal, el minimapa (segundo pase desde arriba) y los paneles.
-
-## Pruebas
-
-Las pruebas unitarias (JUnit 3.8) están en `src/test/java` y cubren las clases que no necesitan ventana: clima,
-colisiones, tráfico, entidades, menús, título, récord y mapa.
-
-```
-mvn test
-```
-
-## Historial de la refactorización
-
-El proyecto era una cadena de herencia `AppCiudad ← Vehiculo ← Iluminacion ← JuegoEntregas` (unas 2.600 líneas, la
-última con casi 1.600). La versión original exacta se conserva en `legacy/com/grafica/` y no forma parte de la
-compilación. La refactorización se verificó comparando el juego original con el nuevo: imágenes idénticas píxel por
-píxel en 11 escenarios (inicio, juego, noche, cámaras, pausa, Game Over, victoria, niveles, movimiento) y partidas
-simuladas de hasta 5.200 cuadros, con teclas programadas y semilla fija, con el mismo estado en cada cuadro.
