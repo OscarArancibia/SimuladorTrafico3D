@@ -1,4 +1,4 @@
-# JuegoEntregas — ciudad 3D con Java 21 y LWJGL 3.3.3
+# Juego — ciudad 3D con Java 21 y LWJGL 3.3.3
 
 Juego de conducción en una ciudad de 21×21 celdas dibujada solo con cajas (OpenGL 3.3 core). Se recogen monedas
 para subir de nivel (3 niveles, 20 monedas para ganar), se esquiva el tráfico y al atropellar a un peatón aparece una
@@ -35,8 +35,6 @@ La clase principal es `Main`. Con `-Ddemo.frames=60` arranca, dibuja 60 cuadros 
 - **Sombras base** bajo el auto, la patrulla, el bus y los bots; se dibujan con la iluminación normal (cambian de día a noche).
 - **Ciclo de día y noche:** 24 horas de juego en 120 s, con amanecer y atardecer graduales; el cielo se interpola y los faros del jugador, el bus y los bots se encienden de noche. `F` apaga los del jugador y `N` salta entre día y noche.
 - **Campo visual dinámico:** a más de 20 u/s o con nitro la cámara abre el campo visual de 55° a 70° y vuelve al frenar.
-- **Surazo (tecla U):** el ambiente se oscurece en 1 s aunque sea de día (cielo gris, sin sol, iluminación apagada y azulada), trae su propia lluvia en diagonal (a 37,5 u/s hacia +X), agita la cámara con ráfagas y el viento no deja pasar de 40 km/h (el tope baja poco a poco, también con nitro).
-- **Bocina:** los bots asustados aceleran a 30 u/s y se calman poco a poco en 3 s.
 
 ## Píldoras
 

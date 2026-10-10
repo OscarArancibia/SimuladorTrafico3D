@@ -49,6 +49,18 @@
       <version>${lwjgl.version}</version>
       <classifier>natives-windows</classifier>
     </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl</artifactId>
+      <version>${lwjgl.version}</version>
+      <classifier>natives-macos</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl</artifactId>
+      <version>${lwjgl.version}</version>
+      <classifier>natives-macos-arm64</classifier>
+    </dependency>
 
     <!-- LWJGL GLFW (Ventanas) -->
     <dependency>
@@ -68,6 +80,18 @@
       <version>${lwjgl.version}</version>
       <classifier>natives-windows</classifier>
     </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-glfw</artifactId>
+      <version>${lwjgl.version}</version>
+      <classifier>natives-macos</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-glfw</artifactId>
+      <version>${lwjgl.version}</version>
+      <classifier>natives-macos-arm64</classifier>
+    </dependency>
 
     <!-- LWJGL OpenGL -->
     <dependency>
@@ -86,6 +110,18 @@
       <artifactId>lwjgl-opengl</artifactId>
       <version>${lwjgl.version}</version>
       <classifier>natives-windows</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-opengl</artifactId>
+      <version>${lwjgl.version}</version>
+      <classifier>natives-macos</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-opengl</artifactId>
+      <version>${lwjgl.version}</version>
+      <classifier>natives-macos-arm64</classifier>
     </dependency>
   </dependencies>
 
